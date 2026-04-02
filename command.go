@@ -254,9 +254,10 @@ func (c *Command) Run(args []string) ([]*Command, error) {
 func (c *Command) Main() {
 	if cmds, err := c.Run(os.Args[1:]); err != nil {
 		if err != ErrHelp {
+			fmt.Fprintf(os.Stderr, "error: %s\n", err)
 			os.Exit(1)
 		}
 
-		fmt.Print(Help(cmds))
+		fmt.Fprintln(os.Stderr, Help(cmds))
 	}
 }
