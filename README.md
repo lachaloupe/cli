@@ -202,7 +202,32 @@ This accepts:
 app --ignore -m 5
 ```
 
-### 7. Commands are declared as a tree
+### 7. Path constraints can be declared next to string arguments
+
+```go
+type Args struct {
+	//cli:path=exists
+	//cli:path=file
+	Input string
+
+	//cli:path=dir
+	//cli:path=empty
+	Scratch string
+}
+```
+
+This accepts existing files for `Input`, and existing empty directories for `Scratch`.
+The supported path directives are:
+
+- `//cli:path=exists`
+- `//cli:path=dir`
+- `//cli:path=file`
+- `//cli:path=empty`
+
+These directives only apply to `string` and `[]string` fields, and they can be combined.
+Under the hood, generated code attaches labels to the argument and wires `cli.PathValidate` into the generic per-argument validation hook.
+
+### 8. Commands are declared as a tree
 
 ```go
 var CLI = cli.Command{
@@ -226,7 +251,7 @@ app login --user alice
 app logout
 ```
 
-### 8. Commands can have aliases
+### 9. Commands can have aliases
 
 ```go
 //cli:alias=signout
@@ -235,7 +260,7 @@ func RunLogout(ctx context.Context) error {
 }
 ```
 
-### 9. Handlers may or may not take an argument struct
+### 10. Handlers may or may not take an argument struct
 
 Without args:
 
@@ -253,30 +278,51 @@ func RunLogin(ctx context.Context, args LoginArgs) error {
 }
 ```
 
-### 13. Custom types can implement `encoding.TextUnmarshaler`
+### 14. Native types and `encoding.TextUnmarshaler`
 
-Native scalar go types are parsed automatically.
+Native scalar Go types are parsed automatically.
 Slices are supported too.
-In addition, some common types are handled by default:
+For other types, the parser assumes the value implements `encoding.TextUnmarshaler`.
+This includes common standard-library types such as:
 
-- `time.Duration`
+- `time.Time`
+- `net.IP`
+- `netip.Addr`
+- `netip.AddrPort`
+- `netip.Prefix`
+- `regexp.Regexp`
+- `big.Int`
+- `big.Rat`
+- `big.Float`
+- `x509.OID`
+- `slog.Level`
+- `slog.LevelVar`
 
-Examples:
-
-```bash
-app --timeout 500ms --retries 3 --dry-run
-```
-
-For everything else, the parser will assume the type supports `UnmarshalText`.
+Example:
 
 ```go
-type Level string
-
-func (l *Level) UnmarshalText(p []byte) error { ... }
-
 type Args struct {
-	Level Level
+	Timeout  time.Duration
+	Origin   url.URL
+	Subnet   net.IPNet
+	MAC      net.HardwareAddr
+	From     mail.Address
+	When     time.Time
+	Resolver netip.Addr
+	Pattern  regexp.Regexp
 }
+```
+
+```bash
+app \
+  --timeout 500ms \
+  --origin https://example.com/api \
+  --subnet 192.0.2.1/24 \
+  --mac 01:23:45:67:89:ab \
+  --from 'Alice <alice@example.com>' \
+  --when 2026-04-05T12:00:00Z \
+  --resolver 1.1.1.1 \
+  --pattern '^demo$'
 ```
 
 ### 15. The runtime parser handles common CLI forms

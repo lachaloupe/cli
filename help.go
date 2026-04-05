@@ -97,5 +97,9 @@ func (arg *Arg) detail() string {
 		detail += fmt.Sprintf(", default: %s", strings.Join(arg.Defaults, " | "))
 	}
 
+	if len(arg.Labels) != 0 {
+		detail += fmt.Sprintf(", labels: %s", strings.Join(arg.Labels, ", "))
+	}
+
 	return detail + ")"
 }

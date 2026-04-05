@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -87,5 +88,71 @@ func TestCLIs(t *testing.T) {
 				t.Fatalf("run output missing %q:\n%s", tt.wantOutput, out)
 			}
 		})
+	}
+}
+
+func TestArgNativeStandardTypes(t *testing.T) {
+	for _, typ := range []string{
+		"complex64",
+		"complex128",
+		"net.HardwareAddr",
+		"net.IPNet",
+		"url.URL",
+		"mail.Address",
+		"[]complex128",
+		"[]net.HardwareAddr",
+	} {
+		arg := &Arg{Type: typ}
+		if !arg.Native() {
+			t.Fatalf("%s should be native", typ)
+		}
+	}
+}
+
+func TestProcessPathDirectiveSetsDefaultValidate(t *testing.T) {
+	c := &Command{
+		Path: "/",
+		Args: []*Arg{
+			{
+				Name:       "Input",
+				Type:       "string",
+				Directives: []string{"path=exists", "path=file"},
+			},
+		},
+	}
+
+	if err := c.Process(); err != nil {
+		t.Fatal(err)
+	}
+
+	arg := c.Args[0]
+	if want, got := "cli.PathValidate", arg.Validate; got != want {
+		t.Fatalf("got %q; want %q", got, want)
+	}
+
+	if want, got := []string{"path:exists", "path:file"}, arg.Labels; !slices.Equal(got, want) {
+		t.Fatalf("got %v; want %v", got, want)
+	}
+}
+
+func TestProcessPathDirectivePreservesValidate(t *testing.T) {
+	c := &Command{
+		Path: "/",
+		Args: []*Arg{
+			{
+				Name:       "Input",
+				Type:       "string",
+				Validate:   "customValidate",
+				Directives: []string{"path=exists"},
+			},
+		},
+	}
+
+	if err := c.Process(); err != nil {
+		t.Fatal(err)
+	}
+
+	if want, got := "customValidate", c.Args[0].Validate; got != want {
+		t.Fatalf("got %q; want %q", got, want)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -38,7 +39,9 @@ type Arg struct {
 	Help       string
 	Doc        string
 	Defaults   []string
+	Labels     []string
 	Directives []string
+	Validate   string
 	Required   bool
 	Positional int
 }
@@ -58,8 +61,14 @@ func (arg *Arg) Native() bool {
 	case "uint":
 	case "float32":
 	case "float64":
+	case "complex64":
+	case "complex128":
 	case "string":
 	case "time.Duration":
+	case "net.HardwareAddr":
+	case "net.IPNet":
+	case "url.URL":
+	case "mail.Address":
 	default:
 		return false
 	}
@@ -147,6 +156,39 @@ func (c *Command) Process() error {
 
 			if value, ok := strings.CutPrefix(d, "default="); ok {
 				arg.Defaults = append(arg.Defaults, value)
+				continue
+			}
+
+			if value, ok := strings.CutPrefix(d, "path="); ok {
+				if base := strings.TrimPrefix(arg.Type, "[]"); base != "string" {
+					return fmt.Errorf("%s: path directive requires string or []string for %q", c.Path, arg.Name)
+				}
+
+				switch value {
+				case "exists", "dir", "file", "empty":
+				default:
+					return fmt.Errorf("%s: unsupported path directive %q for %q", c.Path, value, arg.Name)
+				}
+
+				label := "path:" + value
+
+				if value == "dir" && slices.Contains(arg.Labels, "path:file") {
+					return fmt.Errorf("%s: path directives for %q cannot require both file and dir", c.Path, arg.Name)
+				}
+
+				if value == "file" && slices.Contains(arg.Labels, "path:dir") {
+					return fmt.Errorf("%s: path directives for %q cannot require both file and dir", c.Path, arg.Name)
+				}
+
+				if slices.Contains(arg.Labels, label) {
+					return fmt.Errorf("%s: duplicate path directive %q for %q", c.Path, value, arg.Name)
+				}
+
+				if arg.Validate == "" {
+					arg.Validate = "cli.PathValidate"
+				}
+
+				arg.Labels = append(arg.Labels, label)
 				continue
 			}
 

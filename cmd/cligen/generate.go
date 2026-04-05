@@ -178,6 +178,20 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) {
 				fmt.Fprintln(w, "},")
 			}
 
+			if len(arg.Labels) != 0 {
+				fmt.Fprintf(w, "Labels: []string{")
+
+				for _, label := range arg.Labels {
+					fmt.Fprintf(w, "%q,\n", label)
+				}
+
+				fmt.Fprintln(w, "},")
+			}
+
+			if arg.Validate != "" {
+				fmt.Fprintf(w, "Validate: %s,\n", arg.Validate)
+			}
+
 			if arg.Required {
 				fmt.Fprintln(w, "Required: true,")
 			}

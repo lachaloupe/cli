@@ -5,6 +5,9 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"net"
+	"net/mail"
+	"net/url"
 	"os"
 	"reflect"
 	"slices"
@@ -45,9 +48,11 @@ type Arg struct {
 	Help       string
 	Default    string
 	Defaults   []string
+	Labels     []string
 	Required   bool
 	Positional int
 	Parse      func(string) (any, error)
+	Validate   func(*Arg, string) error
 	Value      any
 }
 
@@ -110,6 +115,12 @@ func (arg *Arg) Set(s string) error {
 			return err
 		}
 
+		if arg.Validate != nil {
+			if err := arg.Validate(arg, s); err != nil {
+				return err
+			}
+		}
+
 		if arg.Value == nil {
 			arg.Value = reflect.MakeSlice(reflect.SliceOf(reflect.TypeOf(r)), 0, 1).Interface()
 		}
@@ -119,11 +130,18 @@ func (arg *Arg) Set(s string) error {
 	}
 
 	val, err := arg.parse(s, arg.Type)
-	if err == nil {
-		arg.Value = val
+	if err != nil {
+		return err
 	}
 
-	return err
+	if arg.Validate != nil {
+		if err := arg.Validate(arg, s); err != nil {
+			return err
+		}
+	}
+
+	arg.Value = val
+	return nil
 }
 
 func (arg Arg) parse(s, kind string) (any, error) {
@@ -212,6 +230,18 @@ func (arg Arg) parse(s, kind string) (any, error) {
 		} else {
 			return float64(f), nil
 		}
+	case "complex64":
+		if c, err := strconv.ParseComplex(s, 64); err != nil {
+			return nil, err
+		} else {
+			return complex64(c), nil
+		}
+	case "complex128":
+		if c, err := strconv.ParseComplex(s, 128); err != nil {
+			return nil, err
+		} else {
+			return c, nil
+		}
 	case "string":
 		r = s
 	case "time.Duration":
@@ -220,6 +250,32 @@ func (arg Arg) parse(s, kind string) (any, error) {
 		} else {
 			r = d
 		}
+	case "net.HardwareAddr":
+		if hw, err := net.ParseMAC(s); err != nil {
+			return nil, err
+		} else {
+			r = hw
+		}
+	case "net.IPNet":
+		if _, ipnet, err := net.ParseCIDR(s); err != nil {
+			return nil, err
+		} else {
+			r = *ipnet
+		}
+	case "url.URL":
+		if u, err := url.Parse(s); err != nil {
+			return nil, err
+		} else {
+			r = *u
+		}
+	case "mail.Address":
+		if addr, err := mail.ParseAddress(s); err != nil {
+			return nil, err
+		} else {
+			r = *addr
+		}
+	default:
+		return nil, fmt.Errorf("unsupported argument type %q", kind)
 	}
 
 	return r, nil

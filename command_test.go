@@ -1,6 +1,11 @@
 package cli
 
 import (
+	"net"
+	"net/mail"
+	"net/url"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -197,6 +202,224 @@ func TestParseEnvironmentSkipsEmptyDefaults(t *testing.T) {
 	}
 }
 
+func TestPathValidateFile(t *testing.T) {
+	root := t.TempDir()
+
+	file := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(file, []byte("demo"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := filepath.Join(root, "dir")
+	if err := os.Mkdir(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	test := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{
+					Name:     "input",
+					Type:     "string",
+					Labels:   []string{"path:exists", "path:file"},
+					Validate: PathValidate,
+				},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	if _, err := test("--input", file); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := test("--input", dir); err == nil {
+		t.Fatal("expected file check to fail for directory")
+	}
+}
+
+func TestPathValidateDir(t *testing.T) {
+	root := t.TempDir()
+
+	file := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(file, []byte("demo"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := filepath.Join(root, "dir")
+	if err := os.Mkdir(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	test := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{
+					Name:     "workspace",
+					Type:     "string",
+					Labels:   []string{"path:exists", "path:dir"},
+					Validate: PathValidate,
+				},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	if _, err := test("--workspace", dir); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := test("--workspace", file); err == nil {
+		t.Fatal("expected dir check to fail for file")
+	}
+}
+
+func TestPathValidateEmptyFile(t *testing.T) {
+	root := t.TempDir()
+
+	empty := filepath.Join(root, "empty.txt")
+	if err := os.WriteFile(empty, nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	file := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(file, []byte("demo"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	test := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{
+					Name:     "scratch",
+					Type:     "string",
+					Labels:   []string{"path:empty"},
+					Validate: PathValidate,
+				},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	if _, err := test("--scratch", empty); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := test("--scratch", file); err == nil {
+		t.Fatal("expected empty check to fail for non-empty file")
+	}
+}
+
+func TestPathValidateEmptyDir(t *testing.T) {
+	root := t.TempDir()
+
+	dir := filepath.Join(root, "dir")
+	if err := os.Mkdir(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	filled := filepath.Join(root, "filled")
+	if err := os.Mkdir(filled, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(filled, "child.txt"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	test := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{
+					Name:     "scratch",
+					Type:     "string",
+					Labels:   []string{"path:empty", "path:dir"},
+					Validate: PathValidate,
+				},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	if _, err := test("--scratch", dir); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := test("--scratch", filled); err == nil {
+		t.Fatal("expected empty dir check to fail for non-empty directory")
+	}
+}
+
+func TestPathValidateSlice(t *testing.T) {
+	root := t.TempDir()
+
+	file := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(file, []byte("demo"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := filepath.Join(root, "dir")
+	if err := os.Mkdir(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	test := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{
+					Name:     "paths",
+					Type:     "[]string",
+					Labels:   []string{"path:exists"},
+					Validate: PathValidate,
+				},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	if _, err := test("--paths", file, "--paths", dir); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestParseCustomValidate(t *testing.T) {
+	seen := []string{}
+
+	c := &Command{
+		Args: []*Arg{
+			{
+				Name: "name",
+				Type: "string",
+				Validate: func(arg *Arg, s string) error {
+					seen = append(seen, arg.Name+":"+s)
+					if s == "bad" {
+						return os.ErrInvalid
+					}
+
+					return nil
+				},
+			},
+		},
+	}
+
+	if _, err := c.Parse([]string{"--name", "ok"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if want := []string{"name:ok"}; !slices.Equal(seen, want) {
+		t.Fatalf("got %v; want %v", seen, want)
+	}
+
+	if _, err := c.Parse([]string{"--name", "bad"}); err == nil {
+		t.Fatal(err)
+	}
+}
+
 func TestParseTypes(t *testing.T) {
 	test := func(args ...string) ([]*Command, error) {
 		c := &Command{
@@ -230,12 +453,36 @@ func TestParseTypes(t *testing.T) {
 					Type: "float64",
 				},
 				{
+					Name: "c64",
+					Type: "complex64",
+				},
+				{
+					Name: "c128",
+					Type: "complex128",
+				},
+				{
 					Name: "flag",
 					Type: "bool",
 				},
 				{
 					Name: "t",
 					Type: "time.Duration",
+				},
+				{
+					Name: "mac",
+					Type: "net.HardwareAddr",
+				},
+				{
+					Name: "cidr",
+					Type: "net.IPNet",
+				},
+				{
+					Name: "endpoint",
+					Type: "url.URL",
+				},
+				{
+					Name: "from",
+					Type: "mail.Address",
 				},
 			},
 		}
@@ -367,6 +614,30 @@ func TestParseTypes(t *testing.T) {
 		}
 	}
 
+	if _, err := test("-c64", "asdf"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	if cmds, err := test("-c64", "1+2i"); err != nil {
+		t.Fatal(err)
+	} else {
+		if want, got := complex64(1+2i), cmds[0].Get("c64").Value.(complex64); got != want {
+			t.Fatalf("got %v; want %v", got, want)
+		}
+	}
+
+	if _, err := test("-c128", "asdf"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	if cmds, err := test("-c128", "1+2i"); err != nil {
+		t.Fatal(err)
+	} else {
+		if want, got := complex128(1+2i), cmds[0].Get("c128").Value.(complex128); got != want {
+			t.Fatalf("got %v; want %v", got, want)
+		}
+	}
+
 	if cmds, err := test("-flag"); err != nil {
 		t.Fatal(err)
 	} else {
@@ -404,6 +675,60 @@ func TestParseTypes(t *testing.T) {
 	}
 
 	if _, err := test("-t", "asdf"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	if cmds, err := test("-mac", "01:23:45:67:89:ab"); err != nil {
+		t.Fatal(err)
+	} else {
+		if want, got := "01:23:45:67:89:ab", cmds[0].Get("mac").Value.(net.HardwareAddr).String(); got != want {
+			t.Fatalf("got %s; want %s", got, want)
+		}
+	}
+
+	if _, err := test("-mac", "asdf"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	if cmds, err := test("-cidr", "192.0.2.1/24"); err != nil {
+		t.Fatal(err)
+	} else {
+		got := cmds[0].Get("cidr").Value.(net.IPNet)
+
+		if want, got := "192.0.2.0/24", (&got).String(); got != want {
+			t.Fatalf("got %s; want %s", got, want)
+		}
+	}
+
+	if _, err := test("-cidr", "asdf"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	if cmds, err := test("-endpoint", "https://example.com/path?q=1"); err != nil {
+		t.Fatal(err)
+	} else {
+		got := cmds[0].Get("endpoint").Value.(url.URL)
+
+		if want, got := "https://example.com/path?q=1", (&got).String(); got != want {
+			t.Fatalf("got %s; want %s", got, want)
+		}
+	}
+
+	if _, err := test("-endpoint", "://bad"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	if cmds, err := test("-from", "Alice <alice@example.com>"); err != nil {
+		t.Fatal(err)
+	} else {
+		got := cmds[0].Get("from").Value.(mail.Address)
+
+		if want, got := "\"Alice\" <alice@example.com>", (&got).String(); got != want {
+			t.Fatalf("got %s; want %s", got, want)
+		}
+	}
+
+	if _, err := test("-from", "not-an-address"); err == nil {
 		t.Fatal("expected error")
 	}
 }
