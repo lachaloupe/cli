@@ -151,6 +151,19 @@ This behaves as if the user passed:
 app --max-count 10
 ```
 
+Default values also support basic environment expansion.
+Multiple `//cli:default=` directives can be provided.
+The first expanded value that is not empty is used as the default.
+For example:
+
+```go
+type Args struct {
+	//cli:default=$XDG_DATA_HOME/my-app
+	//cli:default=$HOME/.local/share/my-app
+	DataDir string
+}
+```
+
 And it's also possible to supply a `New` constructor.
 
 ```go

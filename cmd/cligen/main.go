@@ -37,7 +37,7 @@ type Arg struct {
 	Type       string
 	Help       string
 	Doc        string
-	Default    string
+	Defaults   []string
 	Directives []string
 	Required   bool
 	Positional int
@@ -146,7 +146,7 @@ func (c *Command) Process() error {
 			}
 
 			if value, ok := strings.CutPrefix(d, "default="); ok {
-				arg.Default = value
+				arg.Defaults = append(arg.Defaults, value)
 				continue
 			}
 

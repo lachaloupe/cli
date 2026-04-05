@@ -164,8 +164,18 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) {
 				fmt.Fprintf(w, "Help: %q,\n", help)
 			}
 
-			if arg.Default != "" {
-				fmt.Fprintf(w, "Default: %q,\n", arg.Default)
+			switch len(arg.Defaults) {
+			case 0:
+			case 1:
+				fmt.Fprintf(w, "Default: %q,\n", arg.Defaults[0])
+			default:
+				fmt.Fprintln(w, "Defaults: []string{")
+
+				for _, s := range arg.Defaults {
+					fmt.Fprintf(w, "%q,\n", s)
+				}
+
+				fmt.Fprintln(w, "},")
 			}
 
 			if arg.Required {

@@ -85,8 +85,16 @@ func Help(cmds []*Command) string {
 
 func (arg *Arg) detail() string {
 	detail := fmt.Sprintf("%s (%s", arg.Help, arg.Type)
-	if arg.Default != "" {
+
+	if arg.Default != "" && len(arg.Defaults) != 0 {
+		panic("arg cannot have both Default and Defaults")
+	}
+
+	switch {
+	case arg.Default != "":
 		detail += fmt.Sprintf(", default: %s", arg.Default)
+	case len(arg.Defaults) != 0:
+		detail += fmt.Sprintf(", default: %s", strings.Join(arg.Defaults, " | "))
 	}
 
 	return detail + ")"

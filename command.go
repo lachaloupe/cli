@@ -44,6 +44,7 @@ type Arg struct {
 	Type       string
 	Help       string
 	Default    string
+	Defaults   []string
 	Required   bool
 	Positional int
 	Parse      func(string) (any, error)
@@ -51,15 +52,38 @@ type Arg struct {
 }
 
 func (arg *Arg) SetDefault() error {
-	if arg.Default == "" {
+	defaults := append([]string{arg.Default}, arg.Defaults...)
+
+	if len(defaults) == 0 {
+		return nil
+	}
+
+	value := ""
+	for _, text := range defaults {
+		skip := false
+		value = os.Expand(text, func(name string) string {
+			if value, ok := os.LookupEnv(name); ok && value != "" {
+				return value
+			}
+
+			skip = true
+			return ""
+		})
+
+		if !skip && value != "" {
+			break
+		}
+	}
+
+	if value == "" {
 		return nil
 	}
 
 	if !strings.HasPrefix(arg.Type, "[]") {
-		return arg.Set(arg.Default)
+		return arg.Set(value)
 	}
 
-	r := csv.NewReader(strings.NewReader(arg.Default))
+	r := csv.NewReader(strings.NewReader(value))
 
 	lines, err := r.ReadAll()
 	if err != nil {

@@ -105,6 +105,98 @@ func TestParseFlagAliases(t *testing.T) {
 	}
 }
 
+func TestParseEnvironment(t *testing.T) {
+	t.Setenv("HOME", "/tmp/test-home")
+
+	c := &Command{
+		Args: []*Arg{
+			{
+				Name: "cache-dir",
+				Type: "string",
+				Defaults: []string{
+					"$HOME/.cache/app",
+				},
+			},
+		},
+	}
+
+	cmds, err := c.Parse(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want, got := "/tmp/test-home/.cache/app", cmds[0].Get("cache-dir").Value.(string); got != want {
+		t.Fatalf("got %s; want %s", got, want)
+	}
+}
+
+func TestParseEnvironmentFallback(t *testing.T) {
+	t.Setenv("HOME", "/tmp/test-home")
+	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("CACHE_ROOT", "")
+
+	c := &Command{
+		Args: []*Arg{
+			{
+				Name: "data-dir",
+				Type: "string",
+				Defaults: []string{
+					"$XDG_DATA_HOME/app",
+					"$HOME/.local/share/app",
+				},
+			},
+			{
+				Name: "cache-dir",
+				Type: "string",
+				Defaults: []string{
+					"$CACHE_ROOT/app",
+					"$HOME/.cache/app",
+				},
+			},
+		},
+	}
+
+	cmds, err := c.Parse(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want, got := "/tmp/test-home/.local/share/app", cmds[0].Get("data-dir").Value.(string); got != want {
+		t.Fatalf("got %s; want %s", got, want)
+	}
+
+	if want, got := "/tmp/test-home/.cache/app", cmds[0].Get("cache-dir").Value.(string); got != want {
+		t.Fatalf("got %s; want %s", got, want)
+	}
+}
+
+func TestParseEnvironmentSkipsEmptyDefaults(t *testing.T) {
+	t.Setenv("EMPTY", "")
+
+	c := &Command{
+		Args: []*Arg{
+			{
+				Name: "name",
+				Type: "string",
+				Defaults: []string{
+					"$MISSING",
+					"$EMPTY",
+					"guest",
+				},
+			},
+		},
+	}
+
+	cmds, err := c.Parse(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want, got := "guest", cmds[0].Get("name").Value.(string); got != want {
+		t.Fatalf("got %s; want %s", got, want)
+	}
+}
+
 func TestParseTypes(t *testing.T) {
 	test := func(args ...string) ([]*Command, error) {
 		c := &Command{
