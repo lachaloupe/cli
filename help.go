@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// Help formats help and usage text for the provided command path.
 func Help(cmds []*Command) string {
 	w := &strings.Builder{}
 

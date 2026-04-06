@@ -17,45 +17,69 @@ import (
 )
 
 var (
+	// ErrHelp reports that help output was requested explicitly.
 	ErrHelp = errors.New("help")
 )
 
-// Args is the type used for adding command arguments to the context.
+// Args is a context key used to store the current command arguments.
 type Args string
 
-// Parent is the type used for adding the parent's command path to the context.
+// Parent is a context key used to store the parent command path.
 type Parent struct{}
 
-// Command is used to declare the CLI structure.
+// Command describes a command in a CLI tree, including its flags,
+// positional arguments, subcommands, and runtime handler hooks.
 type Command struct {
-	Name     string
-	Aliases  []string
-	Path     string
-	Help     string
-	Handler  any
-	New      any
-	Args     []*Arg
+	// Name is the command name used on the command line.
+	Name string
+	// Aliases lists additional names that can invoke the command.
+	Aliases []string
+	// Path is the full command path used when nesting commands.
+	Path string
+	// Help is the short help text shown in generated usage output.
+	Help string
+	// Handler stores the user-defined handler value associated with the command.
+	Handler any
+	// New stores the constructor used to allocate handler input values.
+	New any
+	// Args lists the flags and positional arguments accepted by the command.
+	Args []*Arg
+	// Commands lists the command's direct subcommands.
 	Commands []*Command
 
 	invoke func(ctx context.Context, args []string) ([]*Command, error)
 }
 
-// Arg is used to declare a CLI argument.
+// Arg describes a single command-line argument, whether it is exposed as
+// a flag or consumed positionally.
 type Arg struct {
-	Name       string
-	Aliases    []string
-	Type       string
-	Help       string
-	Default    string
-	Defaults   []string
-	Labels     map[string][]string
-	Required   bool
+	// Name is the flag or positional argument name.
+	Name string
+	// Aliases lists additional flag names accepted for the argument.
+	Aliases []string
+	// Type is the Go type name used for parsing the argument value.
+	Type string
+	// Help is the help text shown for the argument in usage output.
+	Help string
+	// Default is the primary default value template for the argument.
+	Default string
+	// Defaults lists fallback default value templates evaluated in order.
+	Defaults []string
+	// Labels stores validation and metadata labels grouped by category.
+	Labels map[string][]string
+	// Required reports whether the argument must be provided.
+	Required bool
+	// Positional controls whether the argument is positional and how many values it consumes.
 	Positional int
-	Parse      func(string) (any, error)
-	Validate   func(*Arg, string) error
-	Value      any
+	// Parse overrides the built-in parser for converting raw strings into values.
+	Parse func(string) (any, error)
+	// Validate validates each raw argument value after parsing.
+	Validate func(*Arg, string) error
+	// Value stores the parsed argument value.
+	Value any
 }
 
+// SetDefault applies the first non-empty default value configured for the argument.
 func (arg *Arg) SetDefault() error {
 	defaults := append([]string{arg.Default}, arg.Defaults...)
 
@@ -108,6 +132,7 @@ func (arg *Arg) SetDefault() error {
 	return nil
 }
 
+// Set parses, validates, and stores a raw argument value.
 func (arg *Arg) Set(s string) error {
 	if item, ok := strings.CutPrefix(arg.Type, "[]"); ok {
 		r, err := arg.parse(s, item)
@@ -281,6 +306,7 @@ func (arg Arg) parse(s, kind string) (any, error) {
 	return r, nil
 }
 
+// Missing reports whether a required argument is still unset.
 func (arg *Arg) Missing() bool {
 	if !arg.Required {
 		return false
@@ -303,10 +329,12 @@ func (arg *Arg) Missing() bool {
 	return n != max(1, arg.Positional)
 }
 
+// Register installs the generated invocation function for the command.
 func (c *Command) Register(f func(ctx context.Context, args []string) ([]*Command, error)) {
 	c.invoke = f
 }
 
+// Get returns the argument that matches the provided name or alias.
 func (c *Command) Get(name string) *Arg {
 	for i := range c.Args {
 		if arg := c.Args[i]; arg.Name == name {
@@ -321,6 +349,7 @@ func (c *Command) Get(name string) *Arg {
 	return nil
 }
 
+// Run executes the command tree against the provided command-line arguments.
 func (c *Command) Run(args []string) ([]*Command, error) {
 	f := c.invoke
 
@@ -331,6 +360,7 @@ func (c *Command) Run(args []string) ([]*Command, error) {
 	return f(context.Background(), args)
 }
 
+// Main runs the command with process arguments and handles help and error output.
 func (c *Command) Main() {
 	if cmds, err := c.Run(os.Args[1:]); err != nil {
 		if err != ErrHelp {

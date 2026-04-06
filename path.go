@@ -7,6 +7,7 @@ import (
 	"slices"
 )
 
+// PathValidate validates a path argument according to its configured path labels.
 func PathValidate(arg *Arg, path string) error {
 	labels := arg.Labels["path"]
 	if len(labels) == 0 {

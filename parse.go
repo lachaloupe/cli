@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// Parse walks the command tree, parses arguments, and returns the matched command path.
 func (c *Command) Parse(args []string) ([]*Command, error) {
 	list := []*Command{}
 	next := c
