@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"encoding/csv"
-	"errors"
 	"fmt"
 	"net"
 	"net/mail"
@@ -14,11 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-)
-
-var (
-	// ErrHelp reports that help output was requested explicitly.
-	ErrHelp = errors.New("help")
 )
 
 // Args is a context key used to store the current command arguments.
@@ -116,11 +110,11 @@ func (arg *Arg) SetDefault() error {
 
 	lines, err := r.ReadAll()
 	if err != nil {
-		return err
+		panic(fmt.Sprintf("invalid CSV default for %q: %v", arg.Name, err))
 	}
 
-	if len(lines) != 0 {
-		return fmt.Errorf("expected a single CSV line for default value of %q", arg.Name)
+	if len(lines) != 1 {
+		panic(fmt.Sprintf("expected a single CSV line for default value of %q", arg.Name))
 	}
 
 	for _, item := range lines[0] {
@@ -137,12 +131,12 @@ func (arg *Arg) Set(s string) error {
 	if item, ok := strings.CutPrefix(arg.Type, "[]"); ok {
 		r, err := arg.parse(s, item)
 		if err != nil {
-			return err
+			return &ArgError{Arg: arg.Name, Value: s, Err: err}
 		}
 
 		if arg.Validate != nil {
 			if err := arg.Validate(arg, s); err != nil {
-				return err
+				return &ArgError{Arg: arg.Name, Value: s, Err: err}
 			}
 		}
 
@@ -156,12 +150,12 @@ func (arg *Arg) Set(s string) error {
 
 	val, err := arg.parse(s, arg.Type)
 	if err != nil {
-		return err
+		return &ArgError{Arg: arg.Name, Value: s, Err: err}
 	}
 
 	if arg.Validate != nil {
 		if err := arg.Validate(arg, s); err != nil {
-			return err
+			return &ArgError{Arg: arg.Name, Value: s, Err: err}
 		}
 	}
 
@@ -300,7 +294,7 @@ func (arg Arg) parse(s, kind string) (any, error) {
 			r = *addr
 		}
 	default:
-		return nil, fmt.Errorf("unsupported argument type %q", kind)
+		panic(fmt.Sprintf("unsupported argument type %q", kind))
 	}
 
 	return r, nil

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -27,11 +26,11 @@ func PathValidate(arg *Arg, path string) error {
 		switch label {
 		case "abs":
 			if !filepath.IsAbs(path) {
-				return fmt.Errorf("%q must reference an absolute path", arg.Name)
+				return &PathError{Kind: ErrPathAbs, Arg: arg.Name, Path: path, Label: label}
 			}
 		case "rel":
 			if filepath.IsAbs(path) {
-				return fmt.Errorf("%q must reference a relative path", arg.Name)
+				return &PathError{Kind: ErrPathRel, Arg: arg.Name, Path: path, Label: label}
 			}
 		case "clean":
 			volume := filepath.VolumeName(path)
@@ -55,7 +54,7 @@ func PathValidate(arg *Arg, path string) error {
 				case "", ".":
 				case "..":
 					if depth <= 1 {
-						return fmt.Errorf("%q must not backtrack outside its root", arg.Name)
+						return &PathError{Kind: ErrPathClean, Arg: arg.Name, Path: path, Label: label}
 					}
 					depth--
 				default:
@@ -64,7 +63,7 @@ func PathValidate(arg *Arg, path string) error {
 			}
 		case "glob":
 			if _, err := filepath.Match(path, ""); err != nil {
-				return fmt.Errorf("%q must be a valid glob pattern: %w", arg.Name, err)
+				return &PathError{Kind: ErrPathGlob, Arg: arg.Name, Path: path, Label: label, Err: err}
 			}
 		default:
 			if len(label) != 0 && label[0] == '.' {
@@ -75,7 +74,7 @@ func PathValidate(arg *Arg, path string) error {
 
 	if len(exts) != 0 {
 		if got := filepath.Ext(path); !slices.Contains(exts, got) {
-			return fmt.Errorf("%q must use one of these extensions: %v", arg.Name, exts)
+			return &PathError{Kind: ErrPathExt, Arg: arg.Name, Path: path, Exts: exts}
 		}
 	}
 
@@ -85,77 +84,77 @@ func PathValidate(arg *Arg, path string) error {
 		case "exists":
 			if statErr != nil {
 				if os.IsNotExist(statErr) {
-					return fmt.Errorf("%q must reference an existing path", arg.Name)
+					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
 				return statErr
 			}
 		case "dir":
 			if statErr != nil {
 				if os.IsNotExist(statErr) {
-					return fmt.Errorf("%q must reference an existing path", arg.Name)
+					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
 				return statErr
 			}
 			if !info.IsDir() {
-				return fmt.Errorf("%q must reference a directory", arg.Name)
+				return &PathError{Kind: ErrPathDir, Arg: arg.Name, Path: path, Label: label}
 			}
 		case "file":
 			if statErr != nil {
 				if os.IsNotExist(statErr) {
-					return fmt.Errorf("%q must reference an existing path", arg.Name)
+					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
 				return statErr
 			}
 			if !info.Mode().IsRegular() {
-				return fmt.Errorf("%q must reference a file", arg.Name)
+				return &PathError{Kind: ErrPathFile, Arg: arg.Name, Path: path, Label: label}
 			}
 		case "empty":
 			if statErr != nil {
 				if os.IsNotExist(statErr) {
-					return fmt.Errorf("%q must reference an existing path", arg.Name)
+					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
 				return statErr
 			}
 			if !info.IsDir() {
-				return fmt.Errorf("%q must reference an empty directory", arg.Name)
+				return &PathError{Kind: ErrPathEmpty, Arg: arg.Name, Path: path, Label: label}
 			}
 			entries, err := os.ReadDir(path)
 			if err != nil {
 				return err
 			}
 			if len(entries) != 0 {
-				return fmt.Errorf("%q must reference an empty directory", arg.Name)
+				return &PathError{Kind: ErrPathEmpty, Arg: arg.Name, Path: path, Label: label}
 			}
 		case "creatable":
 			parent := filepath.Dir(path)
 			parentInfo, err := os.Stat(parent)
 			if err != nil {
 				if os.IsNotExist(err) {
-					return fmt.Errorf("%q must have an existing parent directory", arg.Name)
+					return &PathError{Kind: ErrPathParentExists, Arg: arg.Name, Path: path, Label: label}
 				}
 				return err
 			}
 			if !parentInfo.IsDir() {
-				return fmt.Errorf("%q must have a directory parent", arg.Name)
+				return &PathError{Kind: ErrPathParentDir, Arg: arg.Name, Path: path, Label: label}
 			}
 			if err := ensureWriteable(parent, parentInfo); err != nil {
-				return fmt.Errorf("%q must have a writeable parent directory: %w", arg.Name, err)
+				return &PathError{Kind: ErrPathParentWrite, Arg: arg.Name, Path: path, Label: label, Err: err}
 			}
 		case "readable":
 			if statErr != nil {
 				if os.IsNotExist(statErr) {
-					return fmt.Errorf("%q must reference an existing path", arg.Name)
+					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
 				return statErr
 			}
 			if info.IsDir() {
 				if _, err := os.ReadDir(path); err != nil {
-					return fmt.Errorf("%q must reference a readable path: %w", arg.Name, err)
+					return &PathError{Kind: ErrPathReadable, Arg: arg.Name, Path: path, Label: label, Err: err}
 				}
 			} else {
 				f, err := os.Open(path)
 				if err != nil {
-					return fmt.Errorf("%q must reference a readable path: %w", arg.Name, err)
+					return &PathError{Kind: ErrPathReadable, Arg: arg.Name, Path: path, Label: label, Err: err}
 				}
 				if err := f.Close(); err != nil {
 					return err
@@ -164,22 +163,22 @@ func PathValidate(arg *Arg, path string) error {
 		case "writeable":
 			if statErr != nil {
 				if os.IsNotExist(statErr) {
-					return fmt.Errorf("%q must reference an existing path", arg.Name)
+					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
 				return statErr
 			}
 			if err := ensureWriteable(path, info); err != nil {
-				return fmt.Errorf("%q must reference a writeable path: %w", arg.Name, err)
+				return &PathError{Kind: ErrPathWriteable, Arg: arg.Name, Path: path, Label: label, Err: err}
 			}
 		case "exec":
 			if statErr != nil {
 				if os.IsNotExist(statErr) {
-					return fmt.Errorf("%q must reference an existing path", arg.Name)
+					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
 				return statErr
 			}
 			if info.Mode()&0111 == 0 {
-				return fmt.Errorf("%q must reference an executable path", arg.Name)
+				return &PathError{Kind: ErrPathExecutable, Arg: arg.Name, Path: path, Label: label}
 			}
 		}
 	}
@@ -188,7 +187,7 @@ func PathValidate(arg *Arg, path string) error {
 		switch label {
 		case "not-exists":
 			if _, err := os.Lstat(path); err == nil {
-				return fmt.Errorf("%q must not reference an existing path", arg.Name)
+				return &PathError{Kind: ErrPathNotExists, Arg: arg.Name, Path: path, Label: label}
 			} else if !os.IsNotExist(err) {
 				return err
 			}
@@ -196,12 +195,12 @@ func PathValidate(arg *Arg, path string) error {
 			info, err := os.Lstat(path)
 			if err != nil {
 				if os.IsNotExist(err) {
-					return fmt.Errorf("%q must reference an existing path", arg.Name)
+					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
 				return err
 			}
 			if info.Mode()&os.ModeSymlink == 0 {
-				return fmt.Errorf("%q must reference a symlink", arg.Name)
+				return &PathError{Kind: ErrPathSymlink, Arg: arg.Name, Path: path, Label: label}
 			}
 		}
 	}

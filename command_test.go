@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"net"
 	"net/mail"
 	"net/url"
@@ -27,38 +28,56 @@ func TestParseFlags(t *testing.T) {
 
 	if _, err := test("asdf"); err == nil {
 		t.Fatal("expected error")
+	} else if !errors.Is(err, ErrUnexpectedArg) {
+		t.Fatalf("got %v; want %v", err, ErrUnexpectedArg)
 	}
 
 	if _, err := test("asdf"); err == nil {
 		t.Fatal("expected error")
+	} else if !errors.Is(err, ErrUnexpectedArg) {
+		t.Fatalf("got %v; want %v", err, ErrUnexpectedArg)
 	}
 
 	if _, err := test("-asdf"); err == nil {
 		t.Fatal("expected error")
+	} else if !errors.Is(err, ErrUnknownFlag) {
+		t.Fatalf("got %v; want %v", err, ErrUnknownFlag)
 	}
 
 	if _, err := test("--asdf"); err == nil {
 		t.Fatal("expected error")
+	} else if !errors.Is(err, ErrUnknownFlag) {
+		t.Fatalf("got %v; want %v", err, ErrUnknownFlag)
 	}
 
 	if _, err := test("asdf", "--name"); err == nil {
 		t.Fatal("expected error")
+	} else if !errors.Is(err, ErrUnexpectedArg) {
+		t.Fatalf("got %v; want %v", err, ErrUnexpectedArg)
 	}
 
 	if _, err := test("--name"); err == nil {
 		t.Fatal("expected error")
+	} else if !errors.Is(err, ErrMissingValue) {
+		t.Fatalf("got %v; want %v", err, ErrMissingValue)
 	}
 
 	if _, err := test("asdf", "--name", "asdf"); err == nil {
 		t.Fatal("expected error")
+	} else if !errors.Is(err, ErrUnexpectedArg) {
+		t.Fatalf("got %v; want %v", err, ErrUnexpectedArg)
 	}
 
 	if _, err := test("--name", "asdf", "asdf"); err == nil {
 		t.Fatal("expected error")
+	} else if !errors.Is(err, ErrUnexpectedArg) {
+		t.Fatalf("got %v; want %v", err, ErrUnexpectedArg)
 	}
 
 	if _, err := test("--name", "asdf", "--asdf"); err == nil {
 		t.Fatal("expected error")
+	} else if !errors.Is(err, ErrUnknownFlag) {
+		t.Fatalf("got %v; want %v", err, ErrUnknownFlag)
 	}
 
 	if cmds, err := test("--name", "asdf"); err != nil {
@@ -236,6 +255,20 @@ func TestPathValidateFile(t *testing.T) {
 
 	if _, err := test("--input", dir); err == nil {
 		t.Fatal("expected file check to fail for directory")
+	} else {
+		var argErr *ArgError
+		if !errors.As(err, &argErr) {
+			t.Fatalf("got %T; want *ArgError", err)
+		}
+
+		var pathErr *PathError
+		if !errors.As(err, &pathErr) {
+			t.Fatalf("got %T; want *PathError", err)
+		}
+
+		if !errors.Is(err, ErrPathFile) {
+			t.Fatalf("got %v; want %v", err, ErrPathFile)
+		}
 	}
 }
 
@@ -418,6 +451,8 @@ func TestPathValidateNotExists(t *testing.T) {
 
 	if _, err := test("--target", existing); err == nil {
 		t.Fatal("expected not-exists check to fail for existing path")
+	} else if !errors.Is(err, ErrPathNotExists) {
+		t.Fatalf("got %v; want %v", err, ErrPathNotExists)
 	}
 }
 
@@ -574,6 +609,8 @@ func TestPathValidateAbsAndRel(t *testing.T) {
 
 	if _, err := testAbs("--path", rel); err == nil {
 		t.Fatal("expected abs check to fail for relative path")
+	} else if !errors.Is(err, ErrPathAbs) {
+		t.Fatalf("got %v; want %v", err, ErrPathAbs)
 	}
 
 	if _, err := testRel("--path", rel); err != nil {
@@ -582,6 +619,8 @@ func TestPathValidateAbsAndRel(t *testing.T) {
 
 	if _, err := testRel("--path", abs); err == nil {
 		t.Fatal("expected rel check to fail for absolute path")
+	} else if !errors.Is(err, ErrPathRel) {
+		t.Fatalf("got %v; want %v", err, ErrPathRel)
 	}
 }
 
@@ -685,6 +724,8 @@ func TestPathValidateGlob(t *testing.T) {
 
 	if _, err := test("--pattern", "["); err == nil {
 		t.Fatal("expected glob check to fail for invalid pattern")
+	} else if !errors.Is(err, ErrPathGlob) {
+		t.Fatalf("got %v; want %v", err, ErrPathGlob)
 	}
 }
 
@@ -722,6 +763,67 @@ func TestParseCustomValidate(t *testing.T) {
 
 	if _, err := test("--name", "bad"); err == nil {
 		t.Fatal(err)
+	} else {
+		var argErr *ArgError
+		if !errors.As(err, &argErr) {
+			t.Fatalf("got %T; want *ArgError", err)
+		}
+
+		if !errors.Is(err, os.ErrInvalid) {
+			t.Fatalf("got %v; want %v", err, os.ErrInvalid)
+		}
+	}
+}
+
+func TestParseErrorDetails(t *testing.T) {
+	c := &Command{
+		Args: []*Arg{
+			{Name: "name", Type: "string", Required: true},
+		},
+	}
+
+	_, err := c.Parse(nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	var parseErr *ParseError
+	if !errors.As(err, &parseErr) {
+		t.Fatalf("got %T; want *ParseError", err)
+	}
+
+	if want, got := "name", parseErr.Name; got != want {
+		t.Fatalf("got %q; want %q", got, want)
+	}
+
+	if !errors.Is(err, ErrMissingRequired) {
+		t.Fatalf("got %v; want %v", err, ErrMissingRequired)
+	}
+}
+
+func TestParseTypeErrorsWrapArgContext(t *testing.T) {
+	c := &Command{
+		Args: []*Arg{
+			{Name: "count", Type: "int"},
+		},
+	}
+
+	_, err := c.Parse([]string{"--count", "nope"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	var argErr *ArgError
+	if !errors.As(err, &argErr) {
+		t.Fatalf("got %T; want *ArgError", err)
+	}
+
+	if want, got := "count", argErr.Arg; got != want {
+		t.Fatalf("got %q; want %q", got, want)
+	}
+
+	if want, got := "nope", argErr.Value; got != want {
+		t.Fatalf("got %q; want %q", got, want)
 	}
 }
 

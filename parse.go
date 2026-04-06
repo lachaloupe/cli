@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 )
@@ -21,7 +20,7 @@ func (c *Command) Parse(args []string) ([]*Command, error) {
 
 		for _, arg := range next.Args {
 			if arg.Missing() {
-				return list, fmt.Errorf("missing required argument %q", arg.Name)
+				return list, &ParseError{Kind: ErrMissingRequired, Name: arg.Name}
 			}
 		}
 
@@ -106,7 +105,7 @@ func (c *Command) parseNext(args []string) ([]string, *Command, error) {
 
 			arg := c.Get(name)
 			if arg == nil {
-				return nil, nil, fmt.Errorf("unknown flag %q", name)
+				return nil, nil, &ParseError{Kind: ErrUnknownFlag, Name: name}
 			}
 
 			if arg.Type == "bool" {
@@ -117,7 +116,7 @@ func (c *Command) parseNext(args []string) ([]string, *Command, error) {
 			}
 
 			if len(args) == 0 {
-				return nil, nil, fmt.Errorf("missing value for flag %q", name)
+				return nil, nil, &ParseError{Kind: ErrMissingValue, Name: name}
 			}
 
 			if err := arg.Set(args[0]); err != nil {
@@ -146,7 +145,7 @@ func (c *Command) parseNext(args []string) ([]string, *Command, error) {
 			}
 		}
 
-		return nil, nil, fmt.Errorf("unexpected argument %q", args[0])
+		return nil, nil, &ParseError{Kind: ErrUnexpectedArg, Value: args[0]}
 	}
 
 	for len(args) != 0 {
@@ -158,7 +157,7 @@ func (c *Command) parseNext(args []string) ([]string, *Command, error) {
 			continue
 		}
 
-		return nil, nil, fmt.Errorf("unexpected argument %q", args[0])
+		return nil, nil, &ParseError{Kind: ErrUnexpectedArg, Value: args[0]}
 	}
 
 	return nil, nil, nil
