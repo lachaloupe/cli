@@ -116,7 +116,7 @@ func TestProcessPathDirectiveSetsDefaultValidate(t *testing.T) {
 			{
 				Name:       "Input",
 				Type:       "string",
-				Directives: []string{"path=exists", "path=file"},
+				Directives: []string{"path=creatable", "path=.txt", "path=clean"},
 			},
 		},
 	}
@@ -130,7 +130,7 @@ func TestProcessPathDirectiveSetsDefaultValidate(t *testing.T) {
 		t.Fatalf("got %q; want %q", got, want)
 	}
 
-	if want, got := []string{"path:exists", "path:file"}, arg.Labels; !slices.Equal(got, want) {
+	if want, got := []string{"creatable", ".txt", "clean"}, arg.Labels["path"]; !slices.Equal(got, want) {
 		t.Fatalf("got %v; want %v", got, want)
 	}
 }
@@ -154,5 +154,36 @@ func TestProcessPathDirectivePreservesValidate(t *testing.T) {
 
 	if want, got := "customValidate", c.Args[0].Validate; got != want {
 		t.Fatalf("got %q; want %q", got, want)
+	}
+}
+
+func TestProcessPathDirectiveRejectsConflicts(t *testing.T) {
+	tests := []struct {
+		name       string
+		directives []string
+	}{
+		{name: "not-exists with file", directives: []string{"path=not-exists", "path=file"}},
+		{name: "mkdir with file", directives: []string{"path=mkdir", "path=file"}},
+		{name: "glob with exists", directives: []string{"path=glob", "path=exists"}},
+		{name: "abs with rel", directives: []string{"path=abs", "path=rel"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &Command{
+				Path: "/",
+				Args: []*Arg{
+					{
+						Name:       "Input",
+						Type:       "string",
+						Directives: tt.directives,
+					},
+				},
+			}
+
+			if err := c.Process(); err == nil {
+				t.Fatal("expected conflicting path directives to fail")
+			}
+		})
 	}
 }

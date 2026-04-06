@@ -221,7 +221,7 @@ func TestPathValidateFile(t *testing.T) {
 				{
 					Name:     "input",
 					Type:     "string",
-					Labels:   []string{"path:exists", "path:file"},
+					Labels:   map[string][]string{"path": []string{"exists", "file"}},
 					Validate: PathValidate,
 				},
 			},
@@ -258,7 +258,7 @@ func TestPathValidateDir(t *testing.T) {
 				{
 					Name:     "workspace",
 					Type:     "string",
-					Labels:   []string{"path:exists", "path:dir"},
+					Labels:   map[string][]string{"path": []string{"exists", "dir"}},
 					Validate: PathValidate,
 				},
 			},
@@ -295,7 +295,7 @@ func TestPathValidateEmptyFile(t *testing.T) {
 				{
 					Name:     "scratch",
 					Type:     "string",
-					Labels:   []string{"path:empty"},
+					Labels:   map[string][]string{"path": []string{"empty"}},
 					Validate: PathValidate,
 				},
 			},
@@ -304,8 +304,8 @@ func TestPathValidateEmptyFile(t *testing.T) {
 		return c.Parse(args)
 	}
 
-	if _, err := test("--scratch", empty); err != nil {
-		t.Fatal(err)
+	if _, err := test("--scratch", empty); err == nil {
+		t.Fatal("expected empty to reject files")
 	}
 
 	if _, err := test("--scratch", file); err == nil {
@@ -336,7 +336,7 @@ func TestPathValidateEmptyDir(t *testing.T) {
 				{
 					Name:     "scratch",
 					Type:     "string",
-					Labels:   []string{"path:empty", "path:dir"},
+					Labels:   map[string][]string{"path": []string{"empty", "dir"}},
 					Validate: PathValidate,
 				},
 			},
@@ -373,7 +373,7 @@ func TestPathValidateSlice(t *testing.T) {
 				{
 					Name:     "paths",
 					Type:     "[]string",
-					Labels:   []string{"path:exists"},
+					Labels:   map[string][]string{"path": []string{"exists"}},
 					Validate: PathValidate,
 				},
 			},
@@ -387,27 +387,332 @@ func TestPathValidateSlice(t *testing.T) {
 	}
 }
 
+func TestPathValidateNotExists(t *testing.T) {
+	root := t.TempDir()
+
+	existing := filepath.Join(root, "existing")
+	if err := os.Mkdir(existing, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	missing := filepath.Join(root, "missing")
+
+	test := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{
+					Name:     "target",
+					Type:     "string",
+					Labels:   map[string][]string{"path": []string{"not-exists"}},
+					Validate: PathValidate,
+				},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	if _, err := test("--target", missing); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := test("--target", existing); err == nil {
+		t.Fatal("expected not-exists check to fail for existing path")
+	}
+}
+
+func TestPathValidateMkdir(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "a", "b", "c")
+
+	test := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{
+					Name:     "dir",
+					Type:     "string",
+					Labels:   map[string][]string{"path": []string{"mkdir", "dir"}},
+					Validate: PathValidate,
+				},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	if _, err := test("--dir", dir); err != nil {
+		t.Fatal(err)
+	}
+
+	if info, err := os.Stat(dir); err != nil {
+		t.Fatal(err)
+	} else if !info.IsDir() {
+		t.Fatal("expected mkdir to create a directory")
+	}
+}
+
+func TestPathValidateCreatable(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "child")
+	missingParent := filepath.Join(root, "missing", "child")
+
+	test := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{
+					Name:     "target",
+					Type:     "string",
+					Labels:   map[string][]string{"path": []string{"creatable"}},
+					Validate: PathValidate,
+				},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	if _, err := test("--target", target); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := test("--target", missingParent); err == nil {
+		t.Fatal("expected creatable check to fail when parent is missing")
+	}
+}
+
+func TestPathValidateReadableAndWriteable(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(file, []byte("demo"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	test := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{
+					Name:     "file",
+					Type:     "string",
+					Labels:   map[string][]string{"path": []string{"readable", "writeable"}},
+					Validate: PathValidate,
+				},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	if _, err := test("--file", file); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPathValidateSymlink(t *testing.T) {
+	root := t.TempDir()
+
+	file := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(file, []byte("demo"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	link := filepath.Join(root, "file.link")
+	if err := os.Symlink(file, link); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	test := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{
+					Name:     "target",
+					Type:     "string",
+					Labels:   map[string][]string{"path": []string{"symlink"}},
+					Validate: PathValidate,
+				},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	if _, err := test("--target", link); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := test("--target", file); err == nil {
+		t.Fatal("expected symlink check to fail for regular file")
+	}
+}
+
+func TestPathValidateAbsAndRel(t *testing.T) {
+	abs := filepath.Join(t.TempDir(), "file.txt")
+	rel := filepath.Join("some", "file.txt")
+
+	testAbs := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{Name: "path", Type: "string", Labels: map[string][]string{"path": []string{"abs"}}, Validate: PathValidate},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	testRel := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{Name: "path", Type: "string", Labels: map[string][]string{"path": []string{"rel"}}, Validate: PathValidate},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	if _, err := testAbs("--path", abs); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := testAbs("--path", rel); err == nil {
+		t.Fatal("expected abs check to fail for relative path")
+	}
+
+	if _, err := testRel("--path", rel); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := testRel("--path", abs); err == nil {
+		t.Fatal("expected rel check to fail for absolute path")
+	}
+}
+
+func TestPathValidateExec(t *testing.T) {
+	root := t.TempDir()
+
+	execFile := filepath.Join(root, "exec.sh")
+	if err := os.WriteFile(execFile, []byte("#!/bin/sh\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	plainFile := filepath.Join(root, "plain.sh")
+	if err := os.WriteFile(plainFile, []byte("#!/bin/sh\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	test := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{Name: "file", Type: "string", Labels: map[string][]string{"path": []string{"exec"}}, Validate: PathValidate},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	if _, err := test("--file", execFile); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := test("--file", plainFile); err == nil {
+		t.Fatal("expected exec check to fail for non-executable file")
+	}
+}
+
+func TestPathValidateClean(t *testing.T) {
+	sep := string(filepath.Separator)
+
+	test := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{Name: "path", Type: "string", Labels: map[string][]string{"path": []string{"clean"}}, Validate: PathValidate},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	if _, err := test("--path", "a"+sep+"b"+sep+".."+sep+"c"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := test("--path", "a"+sep+".."+sep+"b"); err == nil {
+		t.Fatal("expected clean check to fail for escaping root")
+	}
+}
+
+func TestPathValidateExt(t *testing.T) {
+	test := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{
+					Name:     "file",
+					Type:     "string",
+					Labels:   map[string][]string{"path": []string{".txt", ".md"}},
+					Validate: PathValidate,
+				},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	if _, err := test("--file", "notes.txt"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := test("--file", "README.md"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := test("--file", "archive.zip"); err == nil {
+		t.Fatal("expected ext check to fail for unsupported extension")
+	}
+}
+
+func TestPathValidateGlob(t *testing.T) {
+	test := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{Name: "pattern", Type: "string", Labels: map[string][]string{"path": []string{"glob"}}, Validate: PathValidate},
+			},
+		}
+
+		return c.Parse(args)
+	}
+
+	if _, err := test("--pattern", "*.txt"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := test("--pattern", "["); err == nil {
+		t.Fatal("expected glob check to fail for invalid pattern")
+	}
+}
+
 func TestParseCustomValidate(t *testing.T) {
 	seen := []string{}
 
-	c := &Command{
-		Args: []*Arg{
-			{
-				Name: "name",
-				Type: "string",
-				Validate: func(arg *Arg, s string) error {
-					seen = append(seen, arg.Name+":"+s)
-					if s == "bad" {
-						return os.ErrInvalid
-					}
+	test := func(args ...string) ([]*Command, error) {
+		c := &Command{
+			Args: []*Arg{
+				{
+					Name: "name",
+					Type: "string",
+					Validate: func(arg *Arg, s string) error {
+						seen = append(seen, arg.Name+":"+s)
+						if s == "bad" {
+							return os.ErrInvalid
+						}
 
-					return nil
+						return nil
+					},
 				},
 			},
-		},
+		}
+
+		return c.Parse(args)
 	}
 
-	if _, err := c.Parse([]string{"--name", "ok"}); err != nil {
+	if _, err := test("--name", "ok"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -415,7 +720,7 @@ func TestParseCustomValidate(t *testing.T) {
 		t.Fatalf("got %v; want %v", seen, want)
 	}
 
-	if _, err := c.Parse([]string{"--name", "bad"}); err == nil {
+	if _, err := test("--name", "bad"); err == nil {
 		t.Fatal(err)
 	}
 }

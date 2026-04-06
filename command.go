@@ -48,7 +48,7 @@ type Arg struct {
 	Help       string
 	Default    string
 	Defaults   []string
-	Labels     []string
+	Labels     map[string][]string
 	Required   bool
 	Positional int
 	Parse      func(string) (any, error)

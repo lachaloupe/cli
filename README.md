@@ -210,20 +210,33 @@ type Args struct {
 	//cli:path=file
 	Input string
 
-	//cli:path=dir
+	//cli:path=mkdir
 	//cli:path=empty
 	Scratch string
 }
 ```
 
-This accepts existing files for `Input`, and existing empty directories for `Scratch`.
+This accepts existing files for `Input`, and ensures `Scratch` exists as an empty directory.
 The supported path directives are:
 
 - `//cli:path=exists`
+- `//cli:path=not-exists`
 - `//cli:path=dir`
 - `//cli:path=file`
+- `//cli:path=mkdir`
+- `//cli:path=creatable`
+- `//cli:path=readable`
+- `//cli:path=writeable`
+- `//cli:path=symlink`
+- `//cli:path=abs`
+- `//cli:path=rel`
+- `//cli:path=exec`
+- `//cli:path=clean`
 - `//cli:path=empty`
+- `//cli:path=glob`
+- `//cli:path=.ext`
 
+Multiple `//cli:path=.ext` directives are allowed and are treated as OR checks.
 These directives only apply to `string` and `[]string` fields, and they can be combined.
 Under the hood, generated code attaches labels to the argument and wires `cli.PathValidate` into the generic per-argument validation hook.
 

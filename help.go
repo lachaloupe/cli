@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -98,7 +99,20 @@ func (arg *Arg) detail() string {
 	}
 
 	if len(arg.Labels) != 0 {
-		detail += fmt.Sprintf(", labels: %s", strings.Join(arg.Labels, ", "))
+		keys := make([]string, 0, len(arg.Labels))
+		for key := range arg.Labels {
+			keys = append(keys, key)
+		}
+		slices.Sort(keys)
+
+		items := []string{}
+		for _, key := range keys {
+			for _, value := range arg.Labels[key] {
+				items = append(items, key+"="+value)
+			}
+		}
+
+		detail += fmt.Sprintf(", labels: %s", strings.Join(items, ", "))
 	}
 
 	return detail + ")"

@@ -39,11 +39,23 @@ type Arg struct {
 	Help       string
 	Doc        string
 	Defaults   []string
-	Labels     []string
+	Labels     map[string][]string
 	Directives []string
 	Validate   string
 	Required   bool
 	Positional int
+}
+
+func (arg *Arg) HasLabel(kind, value string) bool {
+	return slices.Contains(arg.Labels[kind], value)
+}
+
+func (arg *Arg) AddLabel(kind, value string) {
+	if arg.Labels == nil {
+		arg.Labels = make(map[string][]string)
+	}
+
+	arg.Labels[kind] = append(arg.Labels[kind], value)
 }
 
 func (arg *Arg) Native() bool {
@@ -165,30 +177,77 @@ func (c *Command) Process() error {
 				}
 
 				switch value {
-				case "exists", "dir", "file", "empty":
+				case "exists", "not-exists", "dir", "file", "empty", "mkdir", "creatable", "readable", "writeable", "symlink", "abs", "rel", "exec", "clean", "glob":
 				default:
-					return fmt.Errorf("%s: unsupported path directive %q for %q", c.Path, value, arg.Name)
+					if !strings.HasPrefix(value, ".") {
+						return fmt.Errorf("%s: unsupported path directive %q for %q", c.Path, value, arg.Name)
+					}
 				}
 
-				label := "path:" + value
-
-				if value == "dir" && slices.Contains(arg.Labels, "path:file") {
+				if value == "dir" && arg.HasLabel("path", "file") {
 					return fmt.Errorf("%s: path directives for %q cannot require both file and dir", c.Path, arg.Name)
 				}
 
-				if value == "file" && slices.Contains(arg.Labels, "path:dir") {
+				if value == "file" && arg.HasLabel("path", "dir") {
 					return fmt.Errorf("%s: path directives for %q cannot require both file and dir", c.Path, arg.Name)
 				}
 
-				if slices.Contains(arg.Labels, label) {
+				if value == "file" && arg.HasLabel("path", "empty") {
+					return fmt.Errorf("%s: path directives for %q cannot require both file and empty", c.Path, arg.Name)
+				}
+
+				if value == "empty" && arg.HasLabel("path", "file") {
+					return fmt.Errorf("%s: path directives for %q cannot require both empty and file", c.Path, arg.Name)
+				}
+
+				if arg.HasLabel("path", value) {
 					return fmt.Errorf("%s: duplicate path directive %q for %q", c.Path, value, arg.Name)
+				}
+
+				conflicts := []string{}
+
+				switch value {
+				case "dir":
+					conflicts = []string{"file", "not-exists", "glob"}
+				case "file":
+					conflicts = []string{"dir", "empty", "not-exists", "mkdir", "glob"}
+				case "empty":
+					conflicts = []string{"file", "not-exists", "glob"}
+				case "mkdir":
+					conflicts = []string{"file", "not-exists", "glob", "symlink"}
+				case "not-exists":
+					conflicts = []string{"exists", "dir", "file", "empty", "readable", "writeable", "symlink", "exec", "mkdir"}
+				case "exists":
+					conflicts = []string{"not-exists", "glob"}
+				case "readable":
+					conflicts = []string{"not-exists", "glob"}
+				case "writeable":
+					conflicts = []string{"not-exists", "glob"}
+				case "symlink":
+					conflicts = []string{"not-exists", "mkdir", "glob"}
+				case "exec":
+					conflicts = []string{"not-exists", "glob"}
+				case "creatable":
+					conflicts = []string{"glob"}
+				case "glob":
+					conflicts = []string{"exists", "not-exists", "dir", "file", "empty", "mkdir", "creatable", "readable", "writeable", "symlink", "exec"}
+				case "abs":
+					conflicts = []string{"rel"}
+				case "rel":
+					conflicts = []string{"abs"}
+				}
+
+				for _, other := range conflicts {
+					if arg.HasLabel("path", other) {
+						return fmt.Errorf("%s: path directives for %q cannot require both %s and %s", c.Path, arg.Name, value, other)
+					}
 				}
 
 				if arg.Validate == "" {
 					arg.Validate = "cli.PathValidate"
 				}
 
-				arg.Labels = append(arg.Labels, label)
+				arg.AddLabel("path", value)
 				continue
 			}
 

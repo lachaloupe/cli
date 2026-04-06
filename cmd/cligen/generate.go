@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"golang.org/x/tools/imports"
@@ -179,12 +180,20 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) {
 			}
 
 			if len(arg.Labels) != 0 {
-				fmt.Fprintf(w, "Labels: []string{")
-
-				for _, label := range arg.Labels {
-					fmt.Fprintf(w, "%q,\n", label)
+				keys := make([]string, 0, len(arg.Labels))
+				for key := range arg.Labels {
+					keys = append(keys, key)
 				}
+				slices.Sort(keys)
 
+				fmt.Fprintln(w, "Labels: map[string][]string{")
+				for _, key := range keys {
+					fmt.Fprintf(w, "%q: []string{\n", key)
+					for _, value := range arg.Labels[key] {
+						fmt.Fprintf(w, "%q,\n", value)
+					}
+					fmt.Fprintln(w, "},")
+				}
 				fmt.Fprintln(w, "},")
 			}
 
