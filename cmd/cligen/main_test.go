@@ -41,11 +41,19 @@ func TestCLIs(t *testing.T) {
 			wantOutput: "logout",
 		},
 		{
-			file:       "testdata/04-separated/main.go",
-			helpArgs:   []string{"login", "--help"},
-			runArgs:    []string{"login", "--user", "alice", "--password", "secret"},
-			wantHelp:   "--user",
-			wantOutput: "login",
+			file:     "testdata/04-docker/main.go",
+			helpArgs: []string{"container", "run", "--help"},
+			runArgs: []string{
+				"container", "run",
+				"--detach",
+				"--env", "APP_ENV=dev",
+				"--publish", "8080:80",
+				"--name", "web",
+				"nginx:latest",
+				"echo", "hello",
+			},
+			wantHelp:   "--publish",
+			wantOutput: "{true [APP_ENV=dev] [] false web [8080:80] false missing false []  nginx:latest [echo hello]}",
 		},
 	}
 
