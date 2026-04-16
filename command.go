@@ -8,10 +8,12 @@ import (
 	"net/mail"
 	"net/url"
 	"os"
+	"os/signal"
 	"reflect"
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -365,7 +367,10 @@ func (c *Command) Run(ctx context.Context, args []string) ([]*Command, error) {
 
 // Main runs the command with process arguments and handles help and error output.
 func (c *Command) Main() {
-	if cmds, err := c.Run(context.Background(), os.Args[1:]); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if cmds, err := c.Run(ctx, os.Args[1:]); err != nil {
 		if err != ErrHelp {
 			fmt.Fprintf(os.Stderr, "error: %s\n", err)
 			os.Exit(1)
