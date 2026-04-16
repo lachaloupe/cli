@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 
 	"github.com/lachaloupe/cli"
 )
@@ -625,7 +626,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, DockerArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -662,7 +664,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, ImageLsArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -688,7 +691,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, ImagePullArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -710,7 +714,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, ImageRmArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -747,7 +752,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, ContainerLsArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -809,7 +815,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, ContainerRunArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -839,7 +846,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, ContainerLogsArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -861,7 +869,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, ContainerRmArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -886,7 +895,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, NetworkLsArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -912,7 +922,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, NetworkCreateArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -926,7 +937,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, NetworkRmArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -951,7 +963,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, VolumeLsArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -973,7 +986,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, VolumeCreateArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -991,7 +1005,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, VolumeRmArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -1020,7 +1035,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, SystemPruneArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -1034,7 +1050,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, VersionArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 

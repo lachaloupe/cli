@@ -109,11 +109,15 @@ func TestGenerateProviderAWS(t *testing.T) {
 	g := &Generator{
 		Imports: map[string]struct{}{
 			"context":                             {},
+			"errors":                              {},
 			"fmt":                                 {},
+			"io":                                  {},
+			"net/url":                             {},
 			"strings":                             {},
 			"github.com/lachaloupe/cli":           {},
 			"github.com/aws/aws-sdk-go-v2/aws":    {},
 			"github.com/aws/aws-sdk-go-v2/config": {},
+			"github.com/aws/aws-sdk-go-v2/service/s3":             {},
 			"github.com/aws/aws-sdk-go-v2/service/ssm":            {},
 			"github.com/aws/aws-sdk-go-v2/service/secretsmanager": {},
 		},
@@ -157,8 +161,17 @@ func TestGenerateProviderAWS(t *testing.T) {
 		`prevResolve := root.Resolve`,
 		`root.Resolve = resolveNativeValue`,
 		`return resolveNativeValue(ctx, arg, value)`,
+		`if root.ResolveReader != nil {`,
+		`prevResolveReader := root.ResolveReader`,
+		`root.ResolveReader = resolveNativeReader`,
+		`func resolveNativeReader(ctx context.Context, arg *cli.Arg, value string) (io.Reader, bool, error) {`,
+		`errors.Join(f(ctx), cmd.Cleanup())`,
 		`"github.com/aws/aws-sdk-go-v2/config"`,
+		`"github.com/aws/aws-sdk-go-v2/service/s3"`,
+		`"io"`,
+		`"net/url"`,
 		`strings.HasPrefix(value, "@aws:")`,
+		`if u.Scheme != "s3" {`,
 		`case "ssm":`,
 		`case "secret":`,
 	} {
@@ -176,8 +189,10 @@ func TestArgNativeStandardTypes(t *testing.T) {
 		"net.IPNet",
 		"url.URL",
 		"mail.Address",
+		"io.Reader",
 		"[]complex128",
 		"[]net.HardwareAddr",
+		"[]io.Reader",
 	} {
 		arg := &Arg{Type: typ}
 		if !arg.Native() {

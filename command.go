@@ -3,8 +3,11 @@ package cli
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"net/mail"
 	"net/url"
 	"os"
@@ -44,6 +47,10 @@ type Command struct {
 	Commands []*Command
 	// Resolve rewrites raw argument values before built-in file resolution and parsing.
 	Resolve func(context.Context, *Arg, string) (string, bool, error)
+	// ResolveReader rewrites raw argument values for io.Reader fields before built-in file and URI resolution.
+	ResolveReader func(context.Context, *Arg, string) (io.Reader, bool, error)
+	// Cleanups stores callbacks to run after the command handler returns.
+	Cleanups []func() error
 
 	invoke func(ctx context.Context, args []string) ([]*Command, error)
 }
@@ -78,7 +85,7 @@ type Arg struct {
 }
 
 // SetDefault applies the first non-empty default value configured for the argument.
-func (arg *Arg) SetDefault(ctx context.Context, resolve func(context.Context, *Arg, string) (string, error)) error {
+func (arg *Arg) SetDefault(ctx context.Context, resolve func(context.Context, *Arg, string) (string, error), resolveReader func(context.Context, *Arg, string) (io.Reader, error)) error {
 	defaults := append([]string{arg.Default}, arg.Defaults...)
 
 	if len(defaults) == 0 {
@@ -107,7 +114,7 @@ func (arg *Arg) SetDefault(ctx context.Context, resolve func(context.Context, *A
 	}
 
 	if !strings.HasPrefix(arg.Type, "[]") {
-		return arg.Set(ctx, resolve, value)
+		return arg.Set(ctx, resolve, resolveReader, value)
 	}
 
 	r := csv.NewReader(strings.NewReader(value))
@@ -122,7 +129,7 @@ func (arg *Arg) SetDefault(ctx context.Context, resolve func(context.Context, *A
 	}
 
 	for _, item := range lines[0] {
-		if err := arg.Set(ctx, resolve, item); err != nil {
+		if err := arg.Set(ctx, resolve, resolveReader, item); err != nil {
 			return err
 		}
 	}
@@ -131,8 +138,34 @@ func (arg *Arg) SetDefault(ctx context.Context, resolve func(context.Context, *A
 }
 
 // Set parses, validates, and stores a raw argument value.
-func (arg *Arg) Set(ctx context.Context, resolve func(context.Context, *Arg, string) (string, error), s string) error {
+func (arg *Arg) Set(ctx context.Context, resolve func(context.Context, *Arg, string) (string, error), resolveReader func(context.Context, *Arg, string) (io.Reader, error), s string) error {
 	raw := s
+
+	if base := strings.TrimPrefix(arg.Type, "[]"); base == "io.Reader" {
+		r, err := resolveReader(ctx, arg, s)
+		if err != nil {
+			return &ArgError{Arg: arg.Name, Value: raw, Err: err}
+		}
+
+		if arg.Validate != nil {
+			if err := arg.Validate(arg, s); err != nil {
+				return &ArgError{Arg: arg.Name, Value: raw, Err: err}
+			}
+		}
+
+		if strings.HasPrefix(arg.Type, "[]") {
+			if arg.Value == nil {
+				arg.Value = []io.Reader{}
+			}
+
+			arg.Value = append(arg.Value.([]io.Reader), r)
+			return nil
+		}
+
+		arg.Value = r
+		return nil
+	}
+
 	resolved, err := resolve(ctx, arg, s)
 	if err != nil {
 		return &ArgError{Arg: arg.Name, Value: raw, Err: err}
@@ -354,6 +387,16 @@ func (c *Command) Get(name string) *Arg {
 	return nil
 }
 
+func (c *Command) CommandList() []*Command {
+	list := []*Command{c}
+
+	for _, cmd := range c.Commands {
+		list = append(list, cmd.CommandList()...)
+	}
+
+	return list
+}
+
 // Run executes the command tree against the provided command-line arguments.
 func (c *Command) Run(ctx context.Context, args []string) ([]*Command, error) {
 	f := c.invoke
@@ -378,6 +421,16 @@ func (c *Command) Main() {
 
 		fmt.Fprintln(os.Stderr, Help(cmds))
 	}
+}
+
+func (c *Command) Cleanup() error {
+	var err error
+	for i := len(c.Cleanups) - 1; i >= 0; i-- {
+		err = errors.Join(err, c.Cleanups[i]())
+	}
+
+	c.Cleanups = nil
+	return err
 }
 
 func (c *Command) resolveValue(ctx context.Context, arg *Arg, s string) (string, error) {
@@ -408,4 +461,63 @@ func (c *Command) resolveValue(ctx context.Context, arg *Arg, s string) (string,
 	}
 
 	return string(body), nil
+}
+
+func (c *Command) resolveReader(ctx context.Context, arg *Arg, s string) (io.Reader, error) {
+	if c.ResolveReader != nil {
+		if reader, ok, err := c.ResolveReader(ctx, arg, s); err != nil {
+			return nil, err
+		} else if ok {
+			if closer, ok := reader.(io.Closer); ok {
+				c.Cleanups = append(c.Cleanups, closer.Close)
+			}
+
+			return reader, nil
+		}
+	}
+
+	if s == "-" {
+		return os.Stdin, nil
+	}
+
+	if u, err := url.Parse(s); err == nil && u.Scheme != "" {
+		switch u.Scheme {
+		case "http", "https":
+			resp, err := http.DefaultClient.Get(s)
+			if err != nil {
+				return nil, fmt.Errorf("%s: GET %q: %w", arg.Name, s, err)
+			}
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				defer resp.Body.Close()
+				return nil, fmt.Errorf("%s: GET %q: unexpected status %s", arg.Name, s, resp.Status)
+			}
+
+			c.Cleanups = append(c.Cleanups, resp.Body.Close)
+			return resp.Body, nil
+		case "file":
+			path := u.Path
+			if path == "" {
+				return nil, fmt.Errorf("%s: empty file URI %q", arg.Name, s)
+			}
+			if u.Host != "" && u.Host != "localhost" {
+				return nil, fmt.Errorf("%s: unsupported file URI host %q", arg.Name, u.Host)
+			}
+
+			file, err := os.Open(path)
+			if err != nil {
+				return nil, fmt.Errorf("%s: open %q: %w", arg.Name, path, err)
+			}
+
+			c.Cleanups = append(c.Cleanups, file.Close)
+			return file, nil
+		}
+	}
+
+	file, err := os.Open(s)
+	if err != nil {
+		return nil, fmt.Errorf("%s: open %q: %w", arg.Name, s, err)
+	}
+
+	c.Cleanups = append(c.Cleanups, file.Close)
+	return file, nil
 }

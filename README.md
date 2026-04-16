@@ -380,6 +380,30 @@ app \
   --pattern '^demo$'
 ```
 
+`io.Reader` is also supported as a native field type.
+Its value is treated as:
+
+- a filename to open
+- `-` to use `stdin`
+- a `file://`, `http://`, or `https://` URI
+- an `s3://` URI when code is generated with `--provider aws`
+
+Example:
+
+```go
+type Args struct {
+	Input io.Reader
+}
+```
+
+```bash
+app --input payload.json
+app --input -
+app --input file:///tmp/payload.json
+app --input https://example.com/payload.json
+app --input s3://my-bucket/payload.json
+```
+
 ### 15. The runtime parser handles common CLI forms
 
 Supported forms include:

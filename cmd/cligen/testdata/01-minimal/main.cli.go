@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 
 	"github.com/lachaloupe/cli"
 )
@@ -41,7 +42,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, Args) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 

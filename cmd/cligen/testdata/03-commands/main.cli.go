@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 
 	"github.com/lachaloupe/cli"
 )
@@ -62,7 +63,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			}
 
 			f := cmd.Handler.(func(context.Context, LoginArgs) error)
-			if err := f(ctx, s); err != nil {
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 
@@ -70,7 +72,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			ctx = context.WithValue(ctx, cli.Args("/login"), s)
 		case "/logout":
 			f := cmd.Handler.(func(context.Context) error)
-			if err := f(ctx); err != nil {
+			err := errors.Join(f(ctx), cmd.Cleanup())
+			if err != nil {
 				return cmds, err
 			}
 

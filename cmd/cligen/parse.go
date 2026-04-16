@@ -38,6 +38,7 @@ func Parse(filename string, providers []string) (*Generator, error) {
 	gen := Generator{
 		Imports: map[string]struct{}{
 			"context":                   {},
+			"errors":                    {},
 			"github.com/lachaloupe/cli": {},
 		},
 		Providers: map[string]struct{}{},
@@ -55,9 +56,12 @@ func Parse(filename string, providers []string) (*Generator, error) {
 
 	if _, ok := gen.Providers["aws"]; ok {
 		gen.Imports["fmt"] = struct{}{}
+		gen.Imports["io"] = struct{}{}
+		gen.Imports["net/url"] = struct{}{}
 		gen.Imports["strings"] = struct{}{}
 		gen.Imports["github.com/aws/aws-sdk-go-v2/aws"] = struct{}{}
 		gen.Imports["github.com/aws/aws-sdk-go-v2/config"] = struct{}{}
+		gen.Imports["github.com/aws/aws-sdk-go-v2/service/s3"] = struct{}{}
 		gen.Imports["github.com/aws/aws-sdk-go-v2/service/secretsmanager"] = struct{}{}
 		gen.Imports["github.com/aws/aws-sdk-go-v2/service/ssm"] = struct{}{}
 	}
@@ -213,6 +217,19 @@ func (gen *Generator) parseCommand(cmd *Command, lit *ast.CompositeLit) error {
 
 			if cmd.Resolve == "" {
 				return fmt.Errorf("%s: expecting Resolve to be a function name", cmd.Path)
+			}
+		case "ResolveReader":
+			switch p := kv.Value.(type) {
+			case *ast.Ident:
+				cmd.ResolveReader = p.Name
+			case *ast.SelectorExpr:
+				if pkg, ok := p.X.(*ast.Ident); ok {
+					cmd.ResolveReader = fmt.Sprintf("%s.%s", pkg.Name, p.Sel.Name)
+				}
+			}
+
+			if cmd.ResolveReader == "" {
+				return fmt.Errorf("%s: expecting ResolveReader to be a function name", cmd.Path)
 			}
 		case "Name":
 			p, ok := kv.Value.(*ast.BasicLit)

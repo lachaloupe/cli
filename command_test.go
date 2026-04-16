@@ -1,9 +1,13 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/mail"
 	"net/url"
 	"os"
@@ -327,6 +331,175 @@ func TestParseFileResolver(t *testing.T) {
 
 	if want, got := 42, cmds[0].Get("count").Value.(int); got != want {
 		t.Fatalf("got %d; want %d", got, want)
+	}
+}
+
+func TestParseReaderFromFile(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "value.txt")
+	if err := os.WriteFile(file, []byte("hello"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	c := &Command{
+		Args: []*Arg{
+			{
+				Name: "input",
+				Type: "io.Reader",
+			},
+		},
+	}
+
+	cmds, err := c.Parse(context.Background(), []string{"--input", file})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body, err := io.ReadAll(cmds[0].Get("input").Value.(io.Reader))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want, got := "hello", string(body); got != want {
+		t.Fatalf("got %q; want %q", got, want)
+	}
+}
+
+func TestParseReaderFromStdin(t *testing.T) {
+	prev := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		os.Stdin = prev
+		r.Close()
+	})
+
+	os.Stdin = r
+
+	if _, err := w.Write([]byte("stdin-data")); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	c := &Command{
+		Args: []*Arg{
+			{
+				Name: "input",
+				Type: "io.Reader",
+			},
+		},
+	}
+
+	cmds, err := c.Parse(context.Background(), []string{"--input", "-"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body, err := io.ReadAll(cmds[0].Get("input").Value.(io.Reader))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want, got := "stdin-data", string(body); got != want {
+		t.Fatalf("got %q; want %q", got, want)
+	}
+}
+
+func TestParseReaderFromURI(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "value.txt")
+	if err := os.WriteFile(file, []byte("from-file"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("from-http"))
+	}))
+	defer server.Close()
+
+	test := func(value string) string {
+		t.Helper()
+
+		c := &Command{
+			Args: []*Arg{
+				{
+					Name: "input",
+					Type: "io.Reader",
+				},
+			},
+		}
+
+		cmds, err := c.Parse(context.Background(), []string{"--input", value})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		body, err := io.ReadAll(cmds[0].Get("input").Value.(io.Reader))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return string(body)
+	}
+
+	if want, got := "from-file", test("file://"+file); got != want {
+		t.Fatalf("got %q; want %q", got, want)
+	}
+
+	if want, got := "from-http", test(server.URL); got != want {
+		t.Fatalf("got %q; want %q", got, want)
+	}
+}
+
+func TestParseReaderResolveHook(t *testing.T) {
+	c := &Command{
+		ResolveReader: func(ctx context.Context, arg *Arg, s string) (io.Reader, bool, error) {
+			if s == "s3://bucket/key" {
+				return bytes.NewBufferString("resolved"), true, nil
+			}
+
+			return nil, false, nil
+		},
+		Args: []*Arg{
+			{
+				Name: "input",
+				Type: "io.Reader",
+			},
+		},
+	}
+
+	cmds, err := c.Parse(context.Background(), []string{"--input", "s3://bucket/key"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body, err := io.ReadAll(cmds[0].Get("input").Value.(io.Reader))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want, got := "resolved", string(body); got != want {
+		t.Fatalf("got %q; want %q", got, want)
+	}
+}
+
+func TestCommandCleanup(t *testing.T) {
+	cleaned := false
+
+	c := &Command{}
+	c.Cleanups = append(c.Cleanups, func() error {
+		cleaned = true
+		return nil
+	})
+
+	if err := c.Cleanup(); err != nil {
+		t.Fatal(err)
+	}
+
+	if !cleaned {
+		t.Fatal("expected cleanup to run")
 	}
 }
 

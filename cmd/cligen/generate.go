@@ -58,6 +58,17 @@ func (gen *Generator) Generate(filename string) error {
 			fmt.Fprintln(w, "} else {")
 			fmt.Fprintln(w, "root.Resolve = resolveNativeValue")
 			fmt.Fprintln(w, "}")
+			fmt.Fprintln(w, "if root.ResolveReader != nil {")
+			fmt.Fprintln(w, "prevResolveReader := root.ResolveReader")
+			fmt.Fprintln(w, "root.ResolveReader = func(ctx context.Context, arg *cli.Arg, value string) (io.Reader, bool, error) {")
+			fmt.Fprintln(w, "if reader, ok, err := prevResolveReader(ctx, arg, value); ok || err != nil {")
+			fmt.Fprintln(w, "return reader, ok, err")
+			fmt.Fprintln(w, "}")
+			fmt.Fprintln(w, "return resolveNativeReader(ctx, arg, value)")
+			fmt.Fprintln(w, "}")
+			fmt.Fprintln(w, "} else {")
+			fmt.Fprintln(w, "root.ResolveReader = resolveNativeReader")
+			fmt.Fprintln(w, "}")
 		}
 		fmt.Fprintln(w, "cmds, err := root.Parse(ctx, args)")
 		fmt.Fprintln(w, "if err != nil {")
@@ -73,7 +84,8 @@ func (gen *Generator) Generate(filename string) error {
 			if c.Handler != "" {
 				if c.Struct == "" {
 					fmt.Fprintln(w, "f := cmd.Handler.(func(context.Context) error)")
-					fmt.Fprintln(w, "if err := f(ctx); err != nil {")
+					fmt.Fprintln(w, "err := errors.Join(f(ctx), cmd.Cleanup())")
+					fmt.Fprintln(w, "if err != nil {")
 					fmt.Fprintln(w, "return cmds, err")
 					fmt.Fprintln(w, "}")
 				} else {
@@ -92,7 +104,8 @@ func (gen *Generator) Generate(filename string) error {
 
 					fmt.Fprintln(w, "")
 					fmt.Fprintf(w, "f := cmd.Handler.(func(context.Context, %s) error)\n", c.Struct)
-					fmt.Fprintln(w, "if err := f(ctx, s); err != nil {")
+					fmt.Fprintln(w, "err := errors.Join(f(ctx, s), cmd.Cleanup())")
+					fmt.Fprintln(w, "if err != nil {")
 					fmt.Fprintln(w, "return cmds, err")
 					fmt.Fprintln(w, "}")
 				}
@@ -172,6 +185,33 @@ func (gen *Generator) generateNativeResolvers(w io.Writer) {
 		fmt.Fprintf(w, "%s\n", `return "", true, fmt.Errorf("%s: unsupported AWS native value %q", arg.Name, value)`)
 		fmt.Fprintln(w, "}")
 		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "func resolveNativeReader(ctx context.Context, arg *cli.Arg, value string) (io.Reader, bool, error) {")
+		fmt.Fprintln(w, "u, err := url.Parse(value)")
+		fmt.Fprintln(w, "if err != nil {")
+		fmt.Fprintln(w, "return nil, false, nil")
+		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, `if u.Scheme != "s3" {`)
+		fmt.Fprintln(w, "return nil, false, nil")
+		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, `if u.Host == "" || strings.TrimPrefix(u.Path, "/") == "" {`)
+		fmt.Fprintf(w, "%s\n", `return nil, true, fmt.Errorf("%s: invalid S3 URI %q", arg.Name, value)`)
+		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "cfg, err := config.LoadDefaultConfig(ctx)")
+		fmt.Fprintln(w, "if err != nil {")
+		fmt.Fprintf(w, "%s\n", `return nil, true, fmt.Errorf("%s: load AWS config: %w", arg.Name, err)`)
+		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "resp, err := s3.NewFromConfig(cfg).GetObject(ctx, &s3.GetObjectInput{")
+		fmt.Fprintln(w, "Bucket: aws.String(u.Host),")
+		fmt.Fprintln(w, "Key: aws.String(strings.TrimPrefix(u.Path, \"/\")),")
+		fmt.Fprintln(w, "})")
+		fmt.Fprintln(w, "if err != nil {")
+		fmt.Fprintf(w, "%s\n", `return nil, true, fmt.Errorf("%s: resolve %q: %w", arg.Name, value, err)`)
+		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, "return resp.Body, true, nil")
+		fmt.Fprintln(w, "}")
 	}
 }
 
@@ -196,6 +236,10 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) {
 
 	if cmd.Resolve != "" {
 		fmt.Fprintf(w, "Resolve: %s,\n", cmd.Resolve)
+	}
+
+	if cmd.ResolveReader != "" {
+		fmt.Fprintf(w, "ResolveReader: %s,\n", cmd.ResolveReader)
 	}
 
 	help := cmd.Help

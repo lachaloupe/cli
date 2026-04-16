@@ -11,6 +11,10 @@ func (c *Command) Parse(ctx context.Context, args []string) ([]*Command, error) 
 	list := []*Command{}
 	next := c
 
+	for _, cmd := range c.CommandList() {
+		cmd.Cleanups = nil
+	}
+
 	for {
 		list = append(list, next)
 
@@ -38,7 +42,7 @@ func (c *Command) parseNext(ctx context.Context, args []string) ([]string, *Comm
 	positionals := []*Arg{}
 
 	for _, arg := range c.Args {
-		if err := arg.SetDefault(ctx, c.resolveValue); err != nil {
+		if err := arg.SetDefault(ctx, c.resolveValue, c.resolveReader); err != nil {
 			return nil, nil, err
 		}
 
@@ -53,7 +57,7 @@ func (c *Command) parseNext(ctx context.Context, args []string) ([]string, *Comm
 		n := arg.Positional
 
 		if n == 1 {
-			if err := arg.Set(ctx, c.resolveValue, args[0]); err != nil {
+			if err := arg.Set(ctx, c.resolveValue, c.resolveReader, args[0]); err != nil {
 				return err
 			}
 		} else {
@@ -75,7 +79,7 @@ func (c *Command) parseNext(ctx context.Context, args []string) ([]string, *Comm
 			}
 
 			for i := range n {
-				if err := arg.Set(ctx, c.resolveValue, args[i]); err != nil {
+				if err := arg.Set(ctx, c.resolveValue, c.resolveReader, args[i]); err != nil {
 					return err
 				}
 			}
@@ -111,7 +115,7 @@ func (c *Command) parseNext(ctx context.Context, args []string) ([]string, *Comm
 
 			if arg.Type == "bool" {
 				if len(args) == 0 || strings.HasPrefix(args[0], "-") {
-					if err := arg.Set(ctx, c.resolveValue, "true"); err != nil {
+					if err := arg.Set(ctx, c.resolveValue, c.resolveReader, "true"); err != nil {
 						return nil, nil, err
 					}
 					continue
@@ -122,7 +126,7 @@ func (c *Command) parseNext(ctx context.Context, args []string) ([]string, *Comm
 				return nil, nil, &ParseError{Kind: ErrMissingValue, Name: name}
 			}
 
-			if err := arg.Set(ctx, c.resolveValue, args[0]); err != nil {
+			if err := arg.Set(ctx, c.resolveValue, c.resolveReader, args[0]); err != nil {
 				return nil, nil, err
 			}
 

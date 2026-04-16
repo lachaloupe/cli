@@ -18,19 +18,20 @@ type Generator struct {
 }
 
 type Command struct {
-	ID         string
-	Path       string
-	Name       string
-	Aliases    []string
-	Help       string
-	Doc        string
-	Directives []string
-	Handler    string
-	New        string
-	Resolve    string
-	Struct     string
-	Args       []*Arg
-	Commands   []*Command
+	ID            string
+	Path          string
+	Name          string
+	Aliases       []string
+	Help          string
+	Doc           string
+	Directives    []string
+	Handler       string
+	New           string
+	Resolve       string
+	ResolveReader string
+	Struct        string
+	Args          []*Arg
+	Commands      []*Command
 }
 
 type Arg struct {
@@ -99,6 +100,7 @@ func (arg *Arg) Native() bool {
 	case "net.IPNet":
 	case "url.URL":
 	case "mail.Address":
+	case "io.Reader":
 	default:
 		return false
 	}
