@@ -59,7 +59,7 @@ func TestCLIs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.file, func(t *testing.T) {
-			g, err := Parse(tt.file)
+			g, err := Parse(tt.file, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -96,6 +96,75 @@ func TestCLIs(t *testing.T) {
 				t.Fatalf("run output missing %q:\n%s", tt.wantOutput, out)
 			}
 		})
+	}
+}
+
+func TestParseProviderValidation(t *testing.T) {
+	if _, err := Parse("testdata/01-minimal/main.go", []string{"nope"}); err == nil {
+		t.Fatal("expected unsupported provider to fail")
+	}
+}
+
+func TestGenerateProviderAWS(t *testing.T) {
+	g := &Generator{
+		Imports: map[string]struct{}{
+			"context":                             {},
+			"fmt":                                 {},
+			"strings":                             {},
+			"github.com/lachaloupe/cli":           {},
+			"github.com/aws/aws-sdk-go-v2/aws":    {},
+			"github.com/aws/aws-sdk-go-v2/config": {},
+			"github.com/aws/aws-sdk-go-v2/service/ssm":            {},
+			"github.com/aws/aws-sdk-go-v2/service/secretsmanager": {},
+		},
+		Providers: map[string]struct{}{
+			"aws": {},
+		},
+		Cmds: []*Command{
+			{
+				ID:      "CLI",
+				Path:    "/",
+				Handler: "Run",
+				Args: []*Arg{
+					{
+						Name: "name",
+						Flag: "name",
+						Type: "string",
+					},
+				},
+			},
+		},
+	}
+
+	output := "provider_test_output.go"
+	t.Cleanup(func() {
+		_ = os.Remove(output)
+	})
+
+	if err := g.Generate(output); err != nil {
+		t.Fatal(err)
+	}
+
+	p, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	text := string(p)
+	for _, want := range []string{
+		`func resolveNativeValue(ctx context.Context, arg *cli.Arg, value string) (string, bool, error) {`,
+		`if root.Resolve != nil {`,
+		`prevResolve := root.Resolve`,
+		`root.Resolve = resolveNativeValue`,
+		`return resolveNativeValue(ctx, arg, value)`,
+		`"github.com/aws/aws-sdk-go-v2/config"`,
+		`strings.HasPrefix(value, "@aws:")`,
+		`case "ssm":`,
+		`case "secret":`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("generated output missing %q:\n%s", want, text)
+		}
 	}
 }
 

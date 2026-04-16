@@ -11,7 +11,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func Parse(filename string) (*Generator, error) {
+func Parse(filename string, providers []string) (*Generator, error) {
 	filename, err := filepath.Abs(filename)
 	if err != nil {
 		return nil, err
@@ -40,6 +40,26 @@ func Parse(filename string) (*Generator, error) {
 			"context":                   {},
 			"github.com/lachaloupe/cli": {},
 		},
+		Providers: map[string]struct{}{},
+	}
+
+	for _, provider := range providers {
+		switch provider {
+		case "aws":
+		default:
+			return nil, fmt.Errorf("unsupported provider %q", provider)
+		}
+
+		gen.Providers[provider] = struct{}{}
+	}
+
+	if _, ok := gen.Providers["aws"]; ok {
+		gen.Imports["fmt"] = struct{}{}
+		gen.Imports["strings"] = struct{}{}
+		gen.Imports["github.com/aws/aws-sdk-go-v2/aws"] = struct{}{}
+		gen.Imports["github.com/aws/aws-sdk-go-v2/config"] = struct{}{}
+		gen.Imports["github.com/aws/aws-sdk-go-v2/service/secretsmanager"] = struct{}{}
+		gen.Imports["github.com/aws/aws-sdk-go-v2/service/ssm"] = struct{}{}
 	}
 
 	for i, gofile := range pkgs[0].GoFiles {
@@ -180,6 +200,19 @@ func (gen *Generator) parseCommand(cmd *Command, lit *ast.CompositeLit) error {
 
 			if cmd.New == "" {
 				return fmt.Errorf("%s: expecting New to be a function name", cmd.Path)
+			}
+		case "Resolve":
+			switch p := kv.Value.(type) {
+			case *ast.Ident:
+				cmd.Resolve = p.Name
+			case *ast.SelectorExpr:
+				if pkg, ok := p.X.(*ast.Ident); ok {
+					cmd.Resolve = fmt.Sprintf("%s.%s", pkg.Name, p.Sel.Name)
+				}
+			}
+
+			if cmd.Resolve == "" {
+				return fmt.Errorf("%s: expecting Resolve to be a function name", cmd.Path)
 			}
 		case "Name":
 			p, ok := kv.Value.(*ast.BasicLit)

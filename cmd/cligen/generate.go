@@ -33,6 +33,10 @@ func (gen *Generator) Generate(filename string) error {
 
 	fmt.Fprintln(w, "}")
 
+	if gen.hasNativeResolvers() {
+		gen.generateNativeResolvers(w)
+	}
+
 	for _, cmd := range gen.Cmds {
 		fmt.Fprintln(w, "")
 		fmt.Fprintf(w, "func invoke%s(ctx context.Context, args []string) ([]*cli.Command, error) {\n", cmd.ID)
@@ -42,7 +46,20 @@ func (gen *Generator) Generate(filename string) error {
 
 		fmt.Fprintln(w, "}")
 		fmt.Fprintln(w, "")
-		fmt.Fprintln(w, "cmds, err := root.Parse(args)")
+		if gen.hasNativeResolvers() {
+			fmt.Fprintln(w, "if root.Resolve != nil {")
+			fmt.Fprintln(w, "prevResolve := root.Resolve")
+			fmt.Fprintln(w, "root.Resolve = func(ctx context.Context, arg *cli.Arg, value string) (string, bool, error) {")
+			fmt.Fprintln(w, "if resolved, ok, err := prevResolve(ctx, arg, value); ok || err != nil {")
+			fmt.Fprintln(w, "return resolved, ok, err")
+			fmt.Fprintln(w, "}")
+			fmt.Fprintln(w, "return resolveNativeValue(ctx, arg, value)")
+			fmt.Fprintln(w, "}")
+			fmt.Fprintln(w, "} else {")
+			fmt.Fprintln(w, "root.Resolve = resolveNativeValue")
+			fmt.Fprintln(w, "}")
+		}
+		fmt.Fprintln(w, "cmds, err := root.Parse(ctx, args)")
 		fmt.Fprintln(w, "if err != nil {")
 		fmt.Fprintln(w, "return cmds, err")
 		fmt.Fprintln(w, "}")
@@ -105,6 +122,59 @@ func (gen *Generator) Generate(filename string) error {
 	return os.WriteFile(filename, p, 0644)
 }
 
+func (gen *Generator) hasNativeResolvers() bool {
+	return len(gen.Providers) != 0
+}
+
+func (gen *Generator) generateNativeResolvers(w io.Writer) {
+	if _, ok := gen.Providers["aws"]; ok {
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "func resolveNativeValue(ctx context.Context, arg *cli.Arg, value string) (string, bool, error) {")
+		fmt.Fprintln(w, `if !strings.HasPrefix(value, "@aws:") {`)
+		fmt.Fprintln(w, "return value, false, nil")
+		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, `kind, name, ok := strings.Cut(strings.TrimPrefix(value, "@aws:"), ":")`)
+		fmt.Fprintln(w, `if !ok || name == "" {`)
+		fmt.Fprintf(w, "%s\n", `return "", true, fmt.Errorf("%s: invalid AWS native value %q", arg.Name, value)`)
+		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "cfg, err := config.LoadDefaultConfig(ctx)")
+		fmt.Fprintln(w, "if err != nil {")
+		fmt.Fprintf(w, "%s\n", `return "", true, fmt.Errorf("%s: load AWS config: %w", arg.Name, err)`)
+		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "switch kind {")
+		fmt.Fprintln(w, `case "ssm":`)
+		fmt.Fprintln(w, "resp, err := ssm.NewFromConfig(cfg).GetParameter(ctx, &ssm.GetParameterInput{")
+		fmt.Fprintln(w, "Name:           aws.String(name),")
+		fmt.Fprintln(w, "WithDecryption: aws.Bool(true),")
+		fmt.Fprintln(w, "})")
+		fmt.Fprintln(w, "if err != nil {")
+		fmt.Fprintf(w, "%s\n", `return "", true, fmt.Errorf("%s: resolve %q: %w", arg.Name, value, err)`)
+		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, "if resp.Parameter == nil || resp.Parameter.Value == nil {")
+		fmt.Fprintf(w, "%s\n", `return "", true, fmt.Errorf("%s: resolve %q: empty parameter value", arg.Name, value)`)
+		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, "return *resp.Parameter.Value, true, nil")
+		fmt.Fprintln(w, `case "secret":`)
+		fmt.Fprintln(w, "resp, err := secretsmanager.NewFromConfig(cfg).GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{")
+		fmt.Fprintln(w, "SecretId: aws.String(name),")
+		fmt.Fprintln(w, "})")
+		fmt.Fprintln(w, "if err != nil {")
+		fmt.Fprintf(w, "%s\n", `return "", true, fmt.Errorf("%s: resolve %q: %w", arg.Name, value, err)`)
+		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, "if resp.SecretString == nil {")
+		fmt.Fprintf(w, "%s\n", `return "", true, fmt.Errorf("%s: resolve %q: secret string is empty", arg.Name, value)`)
+		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, "return *resp.SecretString, true, nil")
+		fmt.Fprintln(w, "default:")
+		fmt.Fprintf(w, "%s\n", `return "", true, fmt.Errorf("%s: unsupported AWS native value %q", arg.Name, value)`)
+		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, "}")
+	}
+}
+
 func (gen *Generator) generateCommand(w io.Writer, cmd *Command) {
 	if cmd.Name != "" {
 		fmt.Fprintf(w, "Name: %q,\n", cmd.Name)
@@ -122,6 +192,10 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) {
 
 	if cmd.New != "" {
 		fmt.Fprintf(w, "New: %s,\n", cmd.New)
+	}
+
+	if cmd.Resolve != "" {
+		fmt.Fprintf(w, "Resolve: %s,\n", cmd.Resolve)
 	}
 
 	help := cmd.Help

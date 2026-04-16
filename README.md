@@ -202,7 +202,49 @@ This accepts:
 app --ignore -m 5
 ```
 
-### 7. Path constraints can be declared next to string arguments
+### 7. Native value resolvers can expand files and provider-backed values
+
+Any raw CLI value can be resolved before it is parsed into the target Go type.
+
+By default, a value starting with `@` reads the content of a file:
+
+```bash
+app --config @./config.json
+app --token @/run/secrets/api-token
+```
+
+This works for flags, positional arguments, and `//cli:default=` values.
+The resolved text is then parsed as if the user had typed it directly.
+
+To pass a literal value starting with `@`, escape it with another `@`:
+
+```bash
+app --message @@hello
+```
+
+This behaves as if the user passed:
+
+```bash
+app --message @hello
+```
+
+Provider-backed native values can be generated too.
+For AWS support, invoke `cligen` with `--provider aws`:
+
+```go
+//go:generate go tool cligen --provider aws
+```
+
+That enables:
+
+```bash
+app --db-url @aws:ssm:/my-app/db-url
+app --api-key @aws:secret:my-app/api-key
+```
+
+The generated code imports the AWS SDK directly, so the consuming module must add those dependencies itself.
+
+### 8. Path constraints can be declared next to string arguments
 
 ```go
 type Args struct {
@@ -240,7 +282,7 @@ Multiple `//cli:path=.ext` directives are allowed and are treated as OR checks.
 These directives only apply to `string` and `[]string` fields, and they can be combined.
 Under the hood, generated code attaches labels to the argument and wires `cli.PathValidate` into the generic per-argument validation hook.
 
-### 8. Commands are declared as a tree
+### 9. Commands are declared as a tree
 
 ```go
 var CLI = cli.Command{
@@ -264,7 +306,7 @@ app login --user alice
 app logout
 ```
 
-### 9. Commands can have aliases
+### 10. Commands can have aliases
 
 ```go
 //cli:alias=signout
@@ -273,7 +315,7 @@ func RunLogout(ctx context.Context) error {
 }
 ```
 
-### 10. Handlers may or may not take an argument struct
+### 11. Handlers may or may not take an argument struct
 
 Without args:
 

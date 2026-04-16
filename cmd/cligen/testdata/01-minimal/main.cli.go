@@ -26,7 +26,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 		},
 	}
 
-	cmds, err := root.Parse(args)
+	cmds, err := root.Parse(ctx, args)
 	if err != nil {
 		return cmds, err
 	}

@@ -40,6 +40,8 @@ type Command struct {
 	Args []*Arg
 	// Commands lists the command's direct subcommands.
 	Commands []*Command
+	// Resolve rewrites raw argument values before built-in file resolution and parsing.
+	Resolve func(context.Context, *Arg, string) (string, bool, error)
 
 	invoke func(ctx context.Context, args []string) ([]*Command, error)
 }
@@ -74,7 +76,7 @@ type Arg struct {
 }
 
 // SetDefault applies the first non-empty default value configured for the argument.
-func (arg *Arg) SetDefault() error {
+func (arg *Arg) SetDefault(ctx context.Context, resolve func(context.Context, *Arg, string) (string, error)) error {
 	defaults := append([]string{arg.Default}, arg.Defaults...)
 
 	if len(defaults) == 0 {
@@ -103,7 +105,7 @@ func (arg *Arg) SetDefault() error {
 	}
 
 	if !strings.HasPrefix(arg.Type, "[]") {
-		return arg.Set(value)
+		return arg.Set(ctx, resolve, value)
 	}
 
 	r := csv.NewReader(strings.NewReader(value))
@@ -118,7 +120,7 @@ func (arg *Arg) SetDefault() error {
 	}
 
 	for _, item := range lines[0] {
-		if err := arg.Set(item); err != nil {
+		if err := arg.Set(ctx, resolve, item); err != nil {
 			return err
 		}
 	}
@@ -127,16 +129,23 @@ func (arg *Arg) SetDefault() error {
 }
 
 // Set parses, validates, and stores a raw argument value.
-func (arg *Arg) Set(s string) error {
+func (arg *Arg) Set(ctx context.Context, resolve func(context.Context, *Arg, string) (string, error), s string) error {
+	raw := s
+	resolved, err := resolve(ctx, arg, s)
+	if err != nil {
+		return &ArgError{Arg: arg.Name, Value: raw, Err: err}
+	}
+	s = resolved
+
 	if item, ok := strings.CutPrefix(arg.Type, "[]"); ok {
 		r, err := arg.parse(s, item)
 		if err != nil {
-			return &ArgError{Arg: arg.Name, Value: s, Err: err}
+			return &ArgError{Arg: arg.Name, Value: raw, Err: err}
 		}
 
 		if arg.Validate != nil {
 			if err := arg.Validate(arg, s); err != nil {
-				return &ArgError{Arg: arg.Name, Value: s, Err: err}
+				return &ArgError{Arg: arg.Name, Value: raw, Err: err}
 			}
 		}
 
@@ -150,12 +159,12 @@ func (arg *Arg) Set(s string) error {
 
 	val, err := arg.parse(s, arg.Type)
 	if err != nil {
-		return &ArgError{Arg: arg.Name, Value: s, Err: err}
+		return &ArgError{Arg: arg.Name, Value: raw, Err: err}
 	}
 
 	if arg.Validate != nil {
 		if err := arg.Validate(arg, s); err != nil {
-			return &ArgError{Arg: arg.Name, Value: s, Err: err}
+			return &ArgError{Arg: arg.Name, Value: raw, Err: err}
 		}
 	}
 
@@ -344,19 +353,19 @@ func (c *Command) Get(name string) *Arg {
 }
 
 // Run executes the command tree against the provided command-line arguments.
-func (c *Command) Run(args []string) ([]*Command, error) {
+func (c *Command) Run(ctx context.Context, args []string) ([]*Command, error) {
 	f := c.invoke
 
 	if f == nil {
 		panic(fmt.Sprintf("expected cli.Register to be called for %s", c.Name))
 	}
 
-	return f(context.Background(), args)
+	return f(ctx, args)
 }
 
 // Main runs the command with process arguments and handles help and error output.
 func (c *Command) Main() {
-	if cmds, err := c.Run(os.Args[1:]); err != nil {
+	if cmds, err := c.Run(context.Background(), os.Args[1:]); err != nil {
 		if err != ErrHelp {
 			fmt.Fprintf(os.Stderr, "error: %s\n", err)
 			os.Exit(1)
@@ -364,4 +373,34 @@ func (c *Command) Main() {
 
 		fmt.Fprintln(os.Stderr, Help(cmds))
 	}
+}
+
+func (c *Command) resolveValue(ctx context.Context, arg *Arg, s string) (string, error) {
+	if strings.HasPrefix(s, "@@") {
+		return s[1:], nil
+	}
+
+	if c.Resolve != nil {
+		if value, ok, err := c.Resolve(ctx, arg, s); err != nil {
+			return "", err
+		} else if ok {
+			return value, nil
+		}
+	}
+
+	if !strings.HasPrefix(s, "@") {
+		return s, nil
+	}
+
+	p := strings.TrimPrefix(s, "@")
+	if p == "" {
+		return "", fmt.Errorf("%s: empty file reference", arg.Name)
+	}
+
+	body, err := os.ReadFile(p)
+	if err != nil {
+		return "", fmt.Errorf("%s: read %q: %w", arg.Name, p, err)
+	}
+
+	return string(body), nil
 }

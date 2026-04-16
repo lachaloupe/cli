@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/mail"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -23,7 +25,7 @@ func TestParseFlags(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("asdf"); err == nil {
@@ -109,7 +111,7 @@ func TestParseFlagAliases(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if cmds, err := test("-n", "asdf"); err != nil {
@@ -144,7 +146,7 @@ func TestParseEnvironment(t *testing.T) {
 		},
 	}
 
-	cmds, err := c.Parse(nil)
+	cmds, err := c.Parse(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +182,7 @@ func TestParseEnvironmentFallback(t *testing.T) {
 		},
 	}
 
-	cmds, err := c.Parse(nil)
+	cmds, err := c.Parse(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,13 +213,120 @@ func TestParseEnvironmentSkipsEmptyDefaults(t *testing.T) {
 		},
 	}
 
-	cmds, err := c.Parse(nil)
+	cmds, err := c.Parse(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if want, got := "guest", cmds[0].Get("name").Value.(string); got != want {
 		t.Fatalf("got %s; want %s", got, want)
+	}
+}
+
+func TestParseNativeResolver(t *testing.T) {
+	c := &Command{
+		Resolve: func(ctx context.Context, arg *Arg, s string) (string, bool, error) {
+			if s == "@demo:count" {
+				return "42", true, nil
+			}
+
+			return s, false, nil
+		},
+		Args: []*Arg{
+			{
+				Name: "count",
+				Type: "int",
+			},
+		},
+	}
+
+	cmds, err := c.Parse(context.Background(), []string{"--count", "@demo:count"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want, got := 42, cmds[0].Get("count").Value.(int); got != want {
+		t.Fatalf("got %d; want %d", got, want)
+	}
+}
+
+func TestParseNativeResolverEscapesLiteralPrefix(t *testing.T) {
+	c := &Command{
+		Resolve: func(ctx context.Context, arg *Arg, s string) (string, bool, error) {
+			if strings.HasPrefix(s, "@demo:") {
+				return "resolved", true, nil
+			}
+
+			return s, false, nil
+		},
+		Args: []*Arg{
+			{
+				Name: "name",
+				Type: "string",
+			},
+		},
+	}
+
+	cmds, err := c.Parse(context.Background(), []string{"--name", "@@demo:value"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want, got := "@demo:value", cmds[0].Get("name").Value.(string); got != want {
+		t.Fatalf("got %q; want %q", got, want)
+	}
+}
+
+func TestParseEnvironmentDefaultsUseResolver(t *testing.T) {
+	c := &Command{
+		Resolve: func(ctx context.Context, arg *Arg, s string) (string, bool, error) {
+			if s == "@demo:default" {
+				return "guest", true, nil
+			}
+
+			return s, false, nil
+		},
+		Args: []*Arg{
+			{
+				Name:     "name",
+				Type:     "string",
+				Defaults: []string{"@demo:default"},
+			},
+		},
+	}
+
+	cmds, err := c.Parse(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want, got := "guest", cmds[0].Get("name").Value.(string); got != want {
+		t.Fatalf("got %q; want %q", got, want)
+	}
+}
+
+func TestParseFileResolver(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "value.txt")
+	if err := os.WriteFile(file, []byte("42"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	c := &Command{
+		Args: []*Arg{
+			{
+				Name: "count",
+				Type: "int",
+			},
+		},
+	}
+
+	cmds, err := c.Parse(context.Background(), []string{"--count", "@" + file})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want, got := 42, cmds[0].Get("count").Value.(int); got != want {
+		t.Fatalf("got %d; want %d", got, want)
 	}
 }
 
@@ -246,7 +355,7 @@ func TestPathValidateFile(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("--input", file); err != nil {
@@ -297,7 +406,7 @@ func TestPathValidateDir(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("--workspace", dir); err != nil {
@@ -334,7 +443,7 @@ func TestPathValidateEmptyFile(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("--scratch", empty); err == nil {
@@ -375,7 +484,7 @@ func TestPathValidateEmptyDir(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("--scratch", dir); err != nil {
@@ -412,7 +521,7 @@ func TestPathValidateSlice(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("--paths", file, "--paths", dir); err != nil {
@@ -442,7 +551,7 @@ func TestPathValidateNotExists(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("--target", missing); err != nil {
@@ -472,7 +581,7 @@ func TestPathValidateMkdir(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("--dir", dir); err != nil {
@@ -503,7 +612,7 @@ func TestPathValidateCreatable(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("--target", target); err != nil {
@@ -534,7 +643,7 @@ func TestPathValidateReadableAndWriteable(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("--file", file); err != nil {
@@ -567,7 +676,7 @@ func TestPathValidateSymlink(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("--target", link); err != nil {
@@ -590,7 +699,7 @@ func TestPathValidateAbsAndRel(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	testRel := func(args ...string) ([]*Command, error) {
@@ -600,7 +709,7 @@ func TestPathValidateAbsAndRel(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := testAbs("--path", abs); err != nil {
@@ -644,7 +753,7 @@ func TestPathValidateExec(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("--file", execFile); err != nil {
@@ -666,7 +775,7 @@ func TestPathValidateClean(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("--path", "a"+sep+"b"+sep+".."+sep+"c"); err != nil {
@@ -691,7 +800,7 @@ func TestPathValidateExt(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("--file", "notes.txt"); err != nil {
@@ -715,7 +824,7 @@ func TestPathValidateGlob(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("--pattern", "*.txt"); err != nil {
@@ -750,7 +859,7 @@ func TestParseCustomValidate(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("--name", "ok"); err != nil {
@@ -782,7 +891,7 @@ func TestParseErrorDetails(t *testing.T) {
 		},
 	}
 
-	_, err := c.Parse(nil)
+	_, err := c.Parse(context.Background(), nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -808,7 +917,7 @@ func TestParseTypeErrorsWrapArgContext(t *testing.T) {
 		},
 	}
 
-	_, err := c.Parse([]string{"--count", "nope"})
+	_, err := c.Parse(context.Background(), []string{"--count", "nope"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -894,7 +1003,7 @@ func TestParseTypes(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test("-i8", "asdf"); err == nil {
@@ -1162,7 +1271,7 @@ func TestParseCommands(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if cmds, err := test("--name", "hello", "a", "--name", "world"); err != nil {
@@ -1190,7 +1299,7 @@ func TestParseCommandAliases(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if cmds, err := test("signin"); err != nil {
@@ -1234,7 +1343,7 @@ func TestParsePositionals(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if cmds, err := test("hello"); err != nil {
@@ -1303,7 +1412,7 @@ func TestParsePositionalsWithTail(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if cmds, err := test("foo", "bar", "1", "2", "3"); err != nil {
@@ -1357,7 +1466,7 @@ func TestParsePositionalsWithHead(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if cmds, err := test("a", "b", "c"); err != nil {
@@ -1424,7 +1533,7 @@ func TestParseRequired(t *testing.T) {
 			},
 		}
 
-		return c.Parse(args)
+		return c.Parse(context.Background(), args)
 	}
 
 	if _, err := test(); err == nil {
@@ -1503,7 +1612,7 @@ func TestHelp(t *testing.T) {
 			},
 		}
 
-		cmds, err := c.Parse(args)
+		cmds, err := c.Parse(context.Background(), args)
 		if err != ErrHelp {
 			t.Fatal("expected help")
 		}

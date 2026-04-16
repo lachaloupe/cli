@@ -12,8 +12,9 @@ import (
 )
 
 type Generator struct {
-	Cmds    []*Command
-	Imports map[string]struct{}
+	Cmds      []*Command
+	Imports   map[string]struct{}
+	Providers map[string]struct{}
 }
 
 type Command struct {
@@ -26,6 +27,7 @@ type Command struct {
 	Directives []string
 	Handler    string
 	New        string
+	Resolve    string
 	Struct     string
 	Args       []*Arg
 	Commands   []*Command
@@ -44,6 +46,22 @@ type Arg struct {
 	Validate   string
 	Required   bool
 	Positional int
+}
+
+type providerFlags []string
+
+func (p *providerFlags) String() string {
+	return strings.Join(*p, ",")
+}
+
+func (p *providerFlags) Set(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fmt.Errorf("provider cannot be empty")
+	}
+
+	*p = append(*p, value)
+	return nil
 }
 
 func (arg *Arg) HasLabel(kind, value string) bool {
@@ -327,6 +345,8 @@ func main() {
 
 	src := flag.String("source", gofile, "location of source file with cli.Command definition (defaults to $GOFILE)")
 	dst := flag.String("output", output, "output file (defaults to $GOFILE with .cli.go)")
+	var providers providerFlags
+	flag.Var(&providers, "provider", "native value resolver provider to include in generated code (repeatable)")
 
 	flag.Parse()
 
@@ -336,7 +356,7 @@ func main() {
 		gofile = *src
 	}
 
-	g, err := Parse(gofile)
+	g, err := Parse(gofile, providers)
 	if err != nil {
 		log.Fatal(err)
 	}
