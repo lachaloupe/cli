@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -361,6 +363,8 @@ func (gen *Generator) parseStructs(pkgs []*packages.Package, root *Command) erro
 	found := make(map[string]struct{})
 
 	for _, file := range pkgs[0].Syntax {
+		imports := importPaths(file)
+
 		for _, decl := range file.Decls {
 			if g, ok := decl.(*ast.GenDecl); ok && g.Tok == token.TYPE {
 				for _, s := range g.Specs {
@@ -395,7 +399,9 @@ func (gen *Generator) parseStructs(pkgs []*packages.Package, root *Command) erro
 							if pkg, ok := p.X.(*ast.Ident); ok {
 								arg.Type = fmt.Sprintf("%s.%s", pkg.Name, p.Sel.Name)
 
-								gen.Imports[pkg.Name] = struct{}{}
+								if importPath, ok := imports[pkg.Name]; ok {
+									gen.Imports[importPath] = struct{}{}
+								}
 							}
 						case *ast.ArrayType:
 							switch item := p.Elt.(type) {
@@ -405,7 +411,9 @@ func (gen *Generator) parseStructs(pkgs []*packages.Package, root *Command) erro
 								if pkg, ok := item.X.(*ast.Ident); ok {
 									arg.Type = fmt.Sprintf("[]%s.%s", pkg.Name, item.Sel.Name)
 
-									gen.Imports[pkg.Name] = struct{}{}
+									if importPath, ok := imports[pkg.Name]; ok {
+										gen.Imports[importPath] = struct{}{}
+									}
 								}
 							}
 						}
@@ -445,6 +453,34 @@ func (gen *Generator) parseStructs(pkgs []*packages.Package, root *Command) erro
 	}
 
 	return nil
+}
+
+func importPaths(file *ast.File) map[string]string {
+	imports := make(map[string]string, len(file.Imports))
+
+	for _, spec := range file.Imports {
+		if spec.Path == nil {
+			continue
+		}
+
+		importPath, err := strconv.Unquote(spec.Path.Value)
+		if err != nil || importPath == "" {
+			continue
+		}
+
+		if spec.Name != nil {
+			if spec.Name.Name == "_" || spec.Name.Name == "." {
+				continue
+			}
+
+			imports[spec.Name.Name] = importPath
+			continue
+		}
+
+		imports[path.Base(importPath)] = importPath
+	}
+
+	return imports
 }
 
 func (gen *Generator) add(cmd *Command) error {

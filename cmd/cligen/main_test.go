@@ -105,6 +105,79 @@ func TestParseProviderValidation(t *testing.T) {
 	}
 }
 
+func TestGenerateUsesFullImportPathForSelectorFieldTypes(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+
+	dir := t.TempDir()
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/test\n\ngo 1.26.1\n\nrequire github.com/lachaloupe/cli v0.0.0\n\nreplace github.com/lachaloupe/cli => "+root+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	source := `package main
+
+import (
+	"context"
+	"net/url"
+
+	"github.com/lachaloupe/cli"
+)
+
+var CLI = cli.Command{
+	Handler: Run,
+}
+
+type Args struct {
+	Origin url.URL
+}
+
+func Run(context.Context, Args) error {
+	return nil
+}
+`
+
+	mainFile := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(mainFile, []byte(source), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	g, err := Parse(mainFile, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := g.Imports["net/url"]; !ok {
+		t.Fatalf("Parse imports missing net/url: %#v", g.Imports)
+	}
+
+	if _, ok := g.Imports["url"]; ok {
+		t.Fatalf("Parse imports should not include bare url: %#v", g.Imports)
+	}
+
+	generated := filepath.Join(dir, "main.cli.go")
+	if err := g.Generate(generated); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := os.ReadFile(generated)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	text := string(out)
+	if !strings.Contains(text, `"net/url"`) {
+		t.Fatalf("generated output missing net/url import:\n%s", text)
+	}
+
+	if strings.Contains(text, "\n\t\"url\"\n") || strings.Contains(text, "\n\"url\"\n") {
+		t.Fatalf("generated output should not import bare url:\n%s", text)
+	}
+}
+
 func TestGenerateProviderAWS(t *testing.T) {
 	g := &Generator{
 		Imports: map[string]struct{}{
