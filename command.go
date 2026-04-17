@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"reflect"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -25,6 +26,10 @@ type Args string
 
 // Parent is a context key used to store the parent command path.
 type Parent struct{}
+
+// Version enables the optional built-in version subcommand when set.
+// It is empty by default and is intended to be populated at link time.
+var Version string
 
 // Command describes a command in a CLI tree, including its flags,
 // positional arguments, subcommands, and runtime handler hooks.
@@ -395,6 +400,37 @@ func (c *Command) CommandList() []*Command {
 	}
 
 	return list
+}
+
+// AddBuiltins installs optional built-in subcommands for the command tree.
+func (c *Command) AddBuiltins() {
+	if Version == "" {
+		return
+	}
+
+	if c.Path != "/" {
+		return
+	}
+
+	for _, cmd := range c.Commands {
+		if cmd.Name == "version" || slices.Contains(cmd.Aliases, "version") {
+			return
+		}
+	}
+
+	c.Commands = append(c.Commands, &Command{
+		Name:    "version",
+		Path:    "/version",
+		Help:    "Show version information.",
+		Handler: RunVersion,
+	})
+}
+
+// RunVersion prints the configured CLI version.
+func RunVersion(context.Context) error {
+	fmt.Printf("%s %s/%s\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	fmt.Println(Version)
+	return nil
 }
 
 // Run executes the command tree against the provided command-line arguments.

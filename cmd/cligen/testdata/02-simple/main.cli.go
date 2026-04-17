@@ -60,6 +60,8 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 		},
 	}
 
+	root.AddBuiltins()
+
 	cmds, err := root.Parse(ctx, args)
 	if err != nil {
 		return cmds, err
@@ -67,6 +69,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 
 	for _, cmd := range cmds {
 		switch cmd.Path {
+		case "/version":
+			f := cmd.Handler.(func(context.Context) error)
+			err := errors.Join(f(ctx), cmd.Cleanup())
+			if err != nil {
+				return cmds, err
+			}
 		case "/":
 			s := Args{}
 

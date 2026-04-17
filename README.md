@@ -258,6 +258,31 @@ type Args struct {
 }
 ```
 
+### 9. An opt-in built-in `version` command is available
+
+If `cli.Version` is set, generated CLIs automatically add a root `version` command.
+This is intended for link-time injection in CI:
+
+```bash
+go build -ldflags="-X github.com/lachaloupe/cli.Version=v1.2.3"
+```
+
+Then:
+
+```bash
+app version
+```
+
+prints a small version report such as:
+
+```text
+go1.26.1 darwin/arm64
+v1.2.3
+```
+
+If `cli.Version` is left empty, no built-in `version` command is added.
+If your CLI already defines its own `version` command, that command is preserved.
+
 This accepts existing files for `Input`, and ensures `Scratch` exists as an empty directory.
 The supported path directives are:
 

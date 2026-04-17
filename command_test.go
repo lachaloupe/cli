@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -132,6 +133,137 @@ func TestParseFlagAliases(t *testing.T) {
 		if want, got := "hello", cmds[0].Get("name").Value.(string); got != want {
 			t.Fatalf("got %s; want %s", got, want)
 		}
+	}
+}
+
+func TestAddBuiltinsVersionCommand(t *testing.T) {
+	prev := Version
+	Version = "1.2.3"
+	t.Cleanup(func() {
+		Version = prev
+	})
+
+	c := &Command{Path: "/"}
+	c.AddBuiltins()
+
+	if len(c.Commands) != 1 {
+		t.Fatalf("got %d commands; want 1", len(c.Commands))
+	}
+
+	cmd := c.Commands[0]
+	if want, got := "version", cmd.Name; got != want {
+		t.Fatalf("got %q; want %q", got, want)
+	}
+
+	if want, got := "/version", cmd.Path; got != want {
+		t.Fatalf("got %q; want %q", got, want)
+	}
+
+	if want, got := "Show version information.", cmd.Help; got != want {
+		t.Fatalf("got %q; want %q", got, want)
+	}
+}
+
+func TestAddBuiltinsSkipsWhenVersionEmpty(t *testing.T) {
+	prev := Version
+	Version = ""
+	t.Cleanup(func() {
+		Version = prev
+	})
+
+	c := &Command{Path: "/"}
+	c.AddBuiltins()
+
+	if len(c.Commands) != 0 {
+		t.Fatalf("got %d commands; want 0", len(c.Commands))
+	}
+}
+
+func TestAddBuiltinsPreservesExistingVersionCommand(t *testing.T) {
+	prev := Version
+	Version = "1.2.3"
+	t.Cleanup(func() {
+		Version = prev
+	})
+
+	c := &Command{
+		Path: "/",
+		Commands: []*Command{
+			{Name: "version", Path: "/version", Help: "custom"},
+		},
+	}
+	c.AddBuiltins()
+
+	if len(c.Commands) != 1 {
+		t.Fatalf("got %d commands; want 1", len(c.Commands))
+	}
+
+	if want, got := "custom", c.Commands[0].Help; got != want {
+		t.Fatalf("got %q; want %q", got, want)
+	}
+}
+
+func TestManualVersionCommandRun(t *testing.T) {
+	prev := Version
+	Version = "1.2.3"
+	t.Cleanup(func() {
+		Version = prev
+	})
+
+	root := &Command{
+		Path: "/",
+		invoke: func(ctx context.Context, args []string) ([]*Command, error) {
+			cmd := Command{Name: "demo", Path: "/"}
+			cmd.AddBuiltins()
+
+			cmds, err := cmd.Parse(ctx, args)
+			if err != nil {
+				return cmds, err
+			}
+
+			if last := cmds[len(cmds)-1]; last.Path == "/version" {
+				if err := RunVersion(ctx); err != nil {
+					return cmds, err
+				}
+			}
+
+			return cmds, nil
+		},
+	}
+
+	stdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	os.Stdout = w
+	t.Cleanup(func() {
+		os.Stdout = stdout
+	})
+
+	cmds, err := root.Run(context.Background(), []string{"version"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	body, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want, got := []string{"/", "/version"}, []string{cmds[0].Path, cmds[1].Path}; !slices.Equal(got, want) {
+		t.Fatalf("got %v; want %v", got, want)
+	}
+
+	text := string(body)
+	want := runtime.Version() + " " + runtime.GOOS + "/" + runtime.GOARCH + "\n1.2.3\n"
+	if got := text; got != want {
+		t.Fatalf("got %q; want %q", got, want)
 	}
 }
 

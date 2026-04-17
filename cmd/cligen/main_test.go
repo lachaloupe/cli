@@ -16,6 +16,7 @@ func TestCLIs(t *testing.T) {
 		file       string
 		helpArgs   []string
 		runArgs    []string
+		ldflags    []string
 		wantHelp   string
 		wantOutput string
 	}{
@@ -55,6 +56,14 @@ func TestCLIs(t *testing.T) {
 			wantHelp:   "--publish",
 			wantOutput: "{true [APP_ENV=dev] [] false web [8080:80] false missing false []  nginx:latest [echo hello]}",
 		},
+			{
+				file:       "testdata/01-minimal/main.go",
+				helpArgs:   []string{"--help"},
+				runArgs:    []string{"version"},
+				ldflags:    []string{"-X", "github.com/lachaloupe/cli.Version=1.2.3"},
+				wantHelp:   "version",
+				wantOutput: "1.2.3",
+			},
 	}
 
 	for _, tt := range tests {
@@ -73,7 +82,13 @@ func TestCLIs(t *testing.T) {
 			binary := filepath.Join(t.TempDir(), filepath.Base(dir))
 			cache := filepath.Join(t.TempDir(), "gocache")
 
-			build := exec.Command("go", "build", "-o", binary, ".")
+			args := []string{"build", "-o", binary}
+			if len(tt.ldflags) != 0 {
+				args = append(args, "-ldflags", strings.Join(tt.ldflags, " "))
+			}
+			args = append(args, ".")
+
+			build := exec.Command("go", args...)
 			build.Dir = dir
 			build.Env = append(os.Environ(), "GOWORK=off", "GOCACHE="+cache)
 			if out, err := build.CombinedOutput(); err != nil {
@@ -229,6 +244,9 @@ func TestGenerateProviderAWS(t *testing.T) {
 
 	text := string(p)
 	for _, want := range []string{
+		`root.AddBuiltins()`,
+		`case "/version":`,
+		`f := cmd.Handler.(func(context.Context) error)`,
 		`func resolveNativeValue(ctx context.Context, arg *cli.Arg, value string) (string, bool, error) {`,
 		`if root.Resolve != nil {`,
 		`prevResolve := root.Resolve`,

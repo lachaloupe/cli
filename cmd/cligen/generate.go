@@ -38,6 +38,14 @@ func (gen *Generator) Generate(filename string) error {
 	}
 
 	for _, cmd := range gen.Cmds {
+		hasVersion := false
+		for _, c := range cmd.CommandList() {
+			if c.Path == "/version" {
+				hasVersion = true
+				break
+			}
+		}
+
 		fmt.Fprintln(w, "")
 		fmt.Fprintf(w, "func invoke%s(ctx context.Context, args []string) ([]*cli.Command, error) {\n", cmd.ID)
 		fmt.Fprintln(w, "root := cli.Command{")
@@ -45,6 +53,8 @@ func (gen *Generator) Generate(filename string) error {
 		gen.generateCommand(w, cmd)
 
 		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "root.AddBuiltins()")
 		fmt.Fprintln(w, "")
 		if gen.hasNativeResolvers() {
 			fmt.Fprintln(w, "if root.Resolve != nil {")
@@ -77,6 +87,14 @@ func (gen *Generator) Generate(filename string) error {
 		fmt.Fprintln(w, "")
 		fmt.Fprintln(w, "for _, cmd := range cmds {")
 		fmt.Fprintln(w, "switch cmd.Path {")
+		if !hasVersion {
+			fmt.Fprintln(w, "case \"/version\":")
+			fmt.Fprintln(w, "f := cmd.Handler.(func(context.Context) error)")
+			fmt.Fprintln(w, "err := errors.Join(f(ctx), cmd.Cleanup())")
+			fmt.Fprintln(w, "if err != nil {")
+			fmt.Fprintln(w, "return cmds, err")
+			fmt.Fprintln(w, "}")
+		}
 
 		for _, c := range cmd.CommandList() {
 			fmt.Fprintf(w, "case %q:\n", c.Path)
