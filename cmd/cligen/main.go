@@ -1,15 +1,41 @@
 package main
 
 import (
-	"flag"
+	"context"
 	"fmt"
-	"log"
-	"os"
+	"go/ast"
+	"go/token"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/lachaloupe/cli"
+	"golang.org/x/tools/go/packages"
 )
+
+//go:generate go run . -source main.go -output main.cli.go
+
+var CLI = cli.Command{
+	Handler: Run,
+}
+
+type Args struct {
+	// Location of the source file with the cli.Command definition.
+	//cli:default=$GOFILE
+	//cli:required
+	//cli:path=exists
+	//cli:path=file
+	//cli:path=.go
+	Source string
+
+	// Output file. Defaults to the source file with a .cli.go suffix.
+	Output string
+
+	// Native value resolver provider to include in generated code.
+	Provider []string
+}
 
 type Generator struct {
 	Cmds      []*Command
@@ -18,20 +44,20 @@ type Generator struct {
 }
 
 type Command struct {
-	ID            string
-	Path          string
-	Name          string
-	Aliases       []string
-	Help          string
-	Doc           string
-	Directives    []string
-	Handler       string
-	New           string
-	Resolve       string
-	ResolveReader string
-	Struct        string
-	Args          []*Arg
-	Commands      []*Command
+	ID         string
+	Path       string
+	Name       string
+	Aliases    []string
+	Help       string
+	Doc        string
+	Directives []string
+	Handler    string
+	New        string
+	Lookup     string
+	Open       string
+	Struct     string
+	Args       []*Arg
+	Commands   []*Command
 }
 
 type Arg struct {
@@ -43,26 +69,127 @@ type Arg struct {
 	Doc        string
 	Defaults   []string
 	Labels     map[string][]string
+	Choices    []string
 	Directives []string
+	LookupEnum bool
 	Validate   string
 	Required   bool
 	Positional int
 }
 
-type providerFlags []string
-
-func (p *providerFlags) String() string {
-	return strings.Join(*p, ",")
-}
-
-func (p *providerFlags) Set(value string) error {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return fmt.Errorf("provider cannot be empty")
+func Parse(filename string, providers []string) (*Generator, error) {
+	filename, err := filepath.Abs(filename)
+	if err != nil {
+		return nil, err
 	}
 
-	*p = append(*p, value)
-	return nil
+	cfg := &packages.Config{
+		Mode: packages.NeedSyntax | packages.NeedName | packages.NeedFiles,
+		Dir:  filepath.Dir(filename),
+	}
+
+	pkgs, err := packages.Load(cfg, ".")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(pkgs) == 0 {
+		return nil, fmt.Errorf("no package found in %s", filepath.Dir(filename))
+	}
+
+	if len(pkgs[0].Errors) > 0 {
+		return nil, pkgs[0].Errors[0]
+	}
+
+	gen := &Generator{
+		Imports: map[string]struct{}{
+			"context":                   {},
+			"errors":                    {},
+			"github.com/lachaloupe/cli": {},
+		},
+		Providers: map[string]struct{}{},
+	}
+
+	for _, provider := range providers {
+		switch provider {
+		case "aws":
+		default:
+			return nil, fmt.Errorf("unsupported provider %q", provider)
+		}
+
+		gen.Providers[provider] = struct{}{}
+	}
+
+	if _, ok := gen.Providers["aws"]; ok {
+		gen.Imports["fmt"] = struct{}{}
+		gen.Imports["io"] = struct{}{}
+		gen.Imports["net/url"] = struct{}{}
+		gen.Imports["strings"] = struct{}{}
+		gen.Imports["github.com/aws/aws-sdk-go-v2/aws"] = struct{}{}
+		gen.Imports["github.com/aws/aws-sdk-go-v2/config"] = struct{}{}
+		gen.Imports["github.com/aws/aws-sdk-go-v2/service/s3"] = struct{}{}
+		gen.Imports["github.com/aws/aws-sdk-go-v2/service/secretsmanager"] = struct{}{}
+		gen.Imports["github.com/aws/aws-sdk-go-v2/service/ssm"] = struct{}{}
+	}
+
+	for i, file := range pkgs[0].GoFiles {
+		if f, err := filepath.Abs(file); err != nil || f != filename {
+			continue
+		}
+
+		file := pkgs[0].Syntax[i]
+
+		for _, decl := range file.Decls {
+			if g, ok := decl.(*ast.GenDecl); ok && g.Tok == token.VAR {
+				for _, s := range g.Specs {
+					vs, ok := s.(*ast.ValueSpec)
+					if !ok {
+						continue
+					}
+
+					for i, v := range vs.Values {
+						lit, ok := v.(*ast.CompositeLit)
+						if ok {
+							sel, ok := lit.Type.(*ast.SelectorExpr)
+							if ok {
+								pkg, ok := sel.X.(*ast.Ident)
+								if ok && pkg.Name == "cli" && sel.Sel.Name == "Command" {
+									cmd := &Command{
+										ID:   vs.Names[i].Name,
+										Path: "/",
+									}
+
+									if err := gen.parseCommand(cmd, lit); err != nil {
+										return nil, err
+									}
+
+									if err := gen.parseFunctions(pkgs, cmd); err != nil {
+										return nil, err
+									}
+
+									if err := gen.parseStructs(pkgs, cmd); err != nil {
+										return nil, err
+									}
+
+									if err := gen.add(cmd); err != nil {
+										return nil, err
+									}
+
+									break
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if len(gen.Cmds) == 0 {
+		return nil, fmt.Errorf("no cli.Command variable found in %s", filename)
+	}
+
+	return gen, nil
 }
 
 func (arg *Arg) HasLabel(kind, value string) bool {
@@ -191,83 +318,24 @@ func (c *Command) Process() error {
 				continue
 			}
 
+			if d == "enum" {
+				arg.LookupEnum = true
+				continue
+			}
+
+			if value, ok := strings.CutPrefix(d, "enum="); ok {
+				if value == "" {
+					return fmt.Errorf("%s: enum value for %q cannot be empty", c.Path, arg.Name)
+				}
+
+				arg.Choices = append(arg.Choices, value)
+				continue
+			}
+
 			if value, ok := strings.CutPrefix(d, "path="); ok {
-				if base := strings.TrimPrefix(arg.Type, "[]"); base != "string" {
-					return fmt.Errorf("%s: path directive requires string or []string for %q", c.Path, arg.Name)
+				if err := applyPathDirective(c, arg, value); err != nil {
+					return err
 				}
-
-				switch value {
-				case "exists", "not-exists", "dir", "file", "empty", "mkdir", "creatable", "readable", "writeable", "symlink", "abs", "rel", "exec", "clean", "glob":
-				default:
-					if !strings.HasPrefix(value, ".") {
-						return fmt.Errorf("%s: unsupported path directive %q for %q", c.Path, value, arg.Name)
-					}
-				}
-
-				if value == "dir" && arg.HasLabel("path", "file") {
-					return fmt.Errorf("%s: path directives for %q cannot require both file and dir", c.Path, arg.Name)
-				}
-
-				if value == "file" && arg.HasLabel("path", "dir") {
-					return fmt.Errorf("%s: path directives for %q cannot require both file and dir", c.Path, arg.Name)
-				}
-
-				if value == "file" && arg.HasLabel("path", "empty") {
-					return fmt.Errorf("%s: path directives for %q cannot require both file and empty", c.Path, arg.Name)
-				}
-
-				if value == "empty" && arg.HasLabel("path", "file") {
-					return fmt.Errorf("%s: path directives for %q cannot require both empty and file", c.Path, arg.Name)
-				}
-
-				if arg.HasLabel("path", value) {
-					return fmt.Errorf("%s: duplicate path directive %q for %q", c.Path, value, arg.Name)
-				}
-
-				conflicts := []string{}
-
-				switch value {
-				case "dir":
-					conflicts = []string{"file", "not-exists", "glob"}
-				case "file":
-					conflicts = []string{"dir", "empty", "not-exists", "mkdir", "glob"}
-				case "empty":
-					conflicts = []string{"file", "not-exists", "glob"}
-				case "mkdir":
-					conflicts = []string{"file", "not-exists", "glob", "symlink"}
-				case "not-exists":
-					conflicts = []string{"exists", "dir", "file", "empty", "readable", "writeable", "symlink", "exec", "mkdir"}
-				case "exists":
-					conflicts = []string{"not-exists", "glob"}
-				case "readable":
-					conflicts = []string{"not-exists", "glob"}
-				case "writeable":
-					conflicts = []string{"not-exists", "glob"}
-				case "symlink":
-					conflicts = []string{"not-exists", "mkdir", "glob"}
-				case "exec":
-					conflicts = []string{"not-exists", "glob"}
-				case "creatable":
-					conflicts = []string{"glob"}
-				case "glob":
-					conflicts = []string{"exists", "not-exists", "dir", "file", "empty", "mkdir", "creatable", "readable", "writeable", "symlink", "exec"}
-				case "abs":
-					conflicts = []string{"rel"}
-				case "rel":
-					conflicts = []string{"abs"}
-				}
-
-				for _, other := range conflicts {
-					if arg.HasLabel("path", other) {
-						return fmt.Errorf("%s: path directives for %q cannot require both %s and %s", c.Path, arg.Name, value, other)
-					}
-				}
-
-				if arg.Validate == "" {
-					arg.Validate = "cli.PathValidate"
-				}
-
-				arg.AddLabel("path", value)
 				continue
 			}
 
@@ -279,6 +347,21 @@ func (c *Command) Process() error {
 				arg.Aliases = append(arg.Aliases, value)
 				continue
 			}
+		}
+
+		hasPath := len(arg.Labels["path"]) != 0
+		switch {
+		case hasPath && (arg.LookupEnum || len(arg.Choices) != 0):
+			arg.Validate = `func(arg *cli.Arg, s string) error {
+				if err := cli.PathValidate(arg, s); err != nil {
+					return err
+				}
+				return cli.EnumValidate(arg, s)
+			}`
+		case hasPath:
+			arg.Validate = "cli.PathValidate"
+		case arg.LookupEnum || len(arg.Choices) != 0:
+			arg.Validate = "cli.EnumValidate"
 		}
 	}
 
@@ -338,38 +421,108 @@ func (c *Command) Process() error {
 	return nil
 }
 
-func main() {
-	gofile := os.Getenv("GOFILE")
-	output := ""
-	if u := strings.TrimSuffix(gofile, ".go"); u != gofile {
-		output = u + ".cli.go"
+func applyPathDirective(cmd *Command, arg *Arg, value string) error {
+	conflicts := func(value string) []string {
+		switch value {
+		case "dir":
+			return []string{"file", "not-exists", "glob"}
+		case "file":
+			return []string{"dir", "empty", "not-exists", "mkdir", "glob"}
+		case "empty":
+			return []string{"file", "not-exists", "glob"}
+		case "mkdir":
+			return []string{"file", "not-exists", "glob", "symlink"}
+		case "not-exists":
+			return []string{"exists", "dir", "file", "empty", "readable", "writeable", "symlink", "exec", "mkdir"}
+		case "exists":
+			return []string{"not-exists", "glob"}
+		case "readable":
+			return []string{"not-exists", "glob"}
+		case "writeable":
+			return []string{"not-exists", "glob"}
+		case "symlink":
+			return []string{"not-exists", "mkdir", "glob"}
+		case "exec":
+			return []string{"not-exists", "glob"}
+		case "creatable":
+			return []string{"glob"}
+		case "glob":
+			return []string{"exists", "not-exists", "dir", "file", "empty", "mkdir", "creatable", "readable", "writeable", "symlink", "exec"}
+		case "abs":
+			return []string{"rel"}
+		case "rel":
+			return []string{"abs"}
+		default:
+			return nil
+		}
 	}
 
-	src := flag.String("source", gofile, "location of source file with cli.Command definition (defaults to $GOFILE)")
-	dst := flag.String("output", output, "output file (defaults to $GOFILE with .cli.go)")
-	var providers providerFlags
-	flag.Var(&providers, "provider", "native value resolver provider to include in generated code (repeatable)")
-
-	flag.Parse()
-
-	if *src == "" {
-		log.Fatal("missing -source parameter or $GOFILE")
-	} else {
-		gofile = *src
+	if base := strings.TrimPrefix(arg.Type, "[]"); base != "string" {
+		return fmt.Errorf("%s: path directive requires string or []string for %q", cmd.Path, arg.Name)
 	}
 
-	g, err := Parse(gofile, providers)
+	switch value {
+	case "exists", "not-exists", "dir", "file", "empty", "mkdir", "creatable", "readable", "writeable", "symlink", "abs", "rel", "exec", "clean", "glob":
+	default:
+		if !strings.HasPrefix(value, ".") {
+			return fmt.Errorf("%s: unsupported path directive %q for %q", cmd.Path, value, arg.Name)
+		}
+	}
+
+	if value == "dir" && arg.HasLabel("path", "file") {
+		return fmt.Errorf("%s: path directives for %q cannot require both file and dir", cmd.Path, arg.Name)
+	}
+
+	if value == "file" && arg.HasLabel("path", "dir") {
+		return fmt.Errorf("%s: path directives for %q cannot require both file and dir", cmd.Path, arg.Name)
+	}
+
+	if value == "file" && arg.HasLabel("path", "empty") {
+		return fmt.Errorf("%s: path directives for %q cannot require both file and empty", cmd.Path, arg.Name)
+	}
+
+	if value == "empty" && arg.HasLabel("path", "file") {
+		return fmt.Errorf("%s: path directives for %q cannot require both empty and file", cmd.Path, arg.Name)
+	}
+
+	if arg.HasLabel("path", value) {
+		return fmt.Errorf("%s: duplicate path directive %q for %q", cmd.Path, value, arg.Name)
+	}
+
+	for _, other := range conflicts(value) {
+		if arg.HasLabel("path", other) {
+			return fmt.Errorf("%s: path directives for %q cannot require both %s and %s", cmd.Path, arg.Name, value, other)
+		}
+	}
+
+	arg.AddLabel("path", value)
+	return nil
+}
+
+// Run generates the CLI glue for the requested source file.
+func Run(ctx context.Context, args Args) error {
+	_ = ctx
+
+	gofile := args.Source
+	g, err := Parse(gofile, args.Provider)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	if *dst == "" {
-		output = strings.TrimSuffix(gofile, ".go") + ".cli.go"
-	} else {
-		output = *dst
+	output := args.Output
+	if output == "" {
+		if u := strings.TrimSuffix(gofile, ".go"); u != gofile {
+			output = u + ".cli.go"
+		}
 	}
 
 	if err := g.Generate(output); err != nil {
-		log.Fatal(err)
+		return err
 	}
+
+	return nil
+}
+
+func main() {
+	CLI.Main()
 }

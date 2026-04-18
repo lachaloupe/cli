@@ -28,8 +28,7 @@ type LoginArgs struct {
 }
 
 func RunLogin(ctx context.Context, args LoginArgs) error {
-	fmt.Println("login")
-	fmt.Printf("%+v\n", args)
+	fmt.Printf("login user=%s password=%s\n", args.User, args.Password)
 	return nil
 }
 

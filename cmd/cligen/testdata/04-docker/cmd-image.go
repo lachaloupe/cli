@@ -60,6 +60,18 @@ func RunImagePull(ctx context.Context, args ImagePullArgs) error {
 	return nil
 }
 
+type ImageTagArgs struct {
+	// Source and target image references.
+	//cli:arg=2
+	References []string
+}
+
+// RunImageTag tags an image into a repository.
+func RunImageTag(ctx context.Context, args ImageTagArgs) error {
+	fmt.Printf("image tag source=%s target=%s\n", args.References[0], args.References[1])
+	return nil
+}
+
 type ImageRmArgs struct {
 	// Force removal of the image.
 	//cli:alias=f

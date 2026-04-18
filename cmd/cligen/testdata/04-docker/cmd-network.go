@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 )
 
 type NetworkLsArgs struct {
@@ -37,6 +38,15 @@ type NetworkCreateArgs struct {
 	// Restrict external access to the network.
 	Internal bool
 
+	// Assign a preferred MAC address to the network gateway.
+	GatewayMAC net.HardwareAddr
+
+	// Allocate addresses from this subnet.
+	Subnet net.IPNet
+
+	// Restrict dynamic allocation to this subrange.
+	IPRange net.IPNet
+
 	// Network name.
 	//cli:required
 	//cli:arg
@@ -45,8 +55,16 @@ type NetworkCreateArgs struct {
 
 // RunNetworkCreate creates a network.
 func RunNetworkCreate(ctx context.Context, args NetworkCreateArgs) error {
-	fmt.Println("network create")
-	fmt.Println(args)
+	fmt.Printf(
+		"network-create driver=%s internal=%t gateway-mac=%s subnet=%s ip-range=%s labels=%s name=%s\n",
+		args.Driver,
+		args.Internal,
+		args.GatewayMAC.String(),
+		args.Subnet.String(),
+		args.IPRange.String(),
+		fmt.Sprint(args.Label),
+		args.Name,
+	)
 	return nil
 }
 

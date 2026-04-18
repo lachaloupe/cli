@@ -1,0 +1,12 @@
+Usage:  <samples>
+
+Report percentiles from a set of samples
+
+Options:
+  samples          Samples to summarize. ([]float64)
+  --scale          Multiply each sample by this scale factor before reporting. (float32, default: 1)
+  --percentiles    Percentiles to report. ([]float64, default: 50,95,99)
+
+Subcommands:
+  version          Show version information.
+

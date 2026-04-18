@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/lachaloupe/cli"
 )
@@ -24,6 +25,10 @@ var CLI = cli.Command{
 				{
 					Name:    "pull",
 					Handler: RunImagePull,
+				},
+				{
+					Name:    "tag",
+					Handler: RunImageTag,
 				},
 				{
 					Name:    "rm",
@@ -121,6 +126,7 @@ type DockerArgs struct {
 
 	// Daemon socket to connect to.
 	//cli:alias=H
+	//cli:default=unix:///var/run/docker.sock
 	Host []string
 
 	// Use TLS.
@@ -135,8 +141,15 @@ type DockerArgs struct {
 
 // RunDocker runs the root Docker command.
 func RunDocker(ctx context.Context, args DockerArgs) error {
-	fmt.Println("docker")
-	fmt.Println(args)
+	fmt.Printf(
+		"docker api-version=%s config=%s debug=%t host=%s tls=%t tlscacert=%s\n",
+		args.ApiVersion,
+		args.Config,
+		args.Debug,
+		strings.Join(args.Host, ","),
+		args.Tls,
+		args.Tlscacert,
+	)
 	return nil
 }
 

@@ -1,0 +1,2 @@
+curl method=GET headers= data=name=file-demo
+ location=false connect-timeout=5s retry=0 output= cacert= proxy= user-agent=curl/8.0 url=https://example.com/upload

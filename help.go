@@ -99,6 +99,10 @@ func (arg *Arg) detail() string {
 		detail += fmt.Sprintf(", default: %s", strings.Join(arg.Defaults, " | "))
 	}
 
+	if len(arg.Choices) != 0 {
+		detail += fmt.Sprintf(", choices: %s", strings.Join(arg.Choices, ", "))
+	}
+
 	if len(arg.Labels) != 0 {
 		keys := make([]string, 0, len(arg.Labels))
 		for key := range arg.Labels {

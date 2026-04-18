@@ -1,0 +1,27 @@
+Usage:  container run <image> <command>
+
+RunContainerRun runs a command in a new container.
+
+Options:
+  image            Image to run. (string)
+  command          Command and arguments to execute. ([]string)
+  --detach         Run container in background and print container ID. (bool)
+  --env            Set environment variables. ([]string)
+  --env-file       Read in a file of environment variables. ([]string, labels: path=exists, path=file, path=readable)
+  --interactive    Keep STDIN open even if not attached. (bool)
+  --name           Assign a name to the container. (string)
+  --publish        Publish a container's port to the host. ([]string)
+  --rm             Automatically remove the container when it exits. (bool)
+  --pull           Pull image before running. (string, default: missing, choices: always, missing, never)
+  --tty            Allocate a pseudo-TTY. (bool)
+  --volume         Bind mount a volume. ([]string)
+  --workdir        Working directory inside the container. (string)
+
+Options (global):
+  --api-version    Set the API version to use. (string)
+  --config         Location of client configuration files. (string, labels: path=creatable, path=clean)
+  --debug          Enable debug mode. (bool)
+  --host           Daemon socket to connect to. ([]string, default: unix:///var/run/docker.sock)
+  --tls            Use TLS. (bool)
+  --tlscacert      Trust certs signed only by this CA. (string, labels: path=file, path=creatable, path=clean)
+

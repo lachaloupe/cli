@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net"
 
 	"github.com/lachaloupe/cli"
 )
@@ -47,6 +48,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Type:    "[]string",
 				Aliases: []string{"H"},
 				Help:    "Daemon socket to connect to.",
+				Default: "unix:///var/run/docker.sock",
 			},
 			{
 				Name: "tls",
@@ -143,6 +145,20 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 								Help:       "Image name to pull.",
 								Required:   true,
 								Positional: 1,
+							},
+						},
+					},
+					{
+						Name:    "tag",
+						Path:    "/image/tag",
+						Handler: RunImageTag,
+						Help:    "RunImageTag tags an image into a repository.",
+						Args: []*cli.Arg{
+							{
+								Name:       "references",
+								Type:       "[]string",
+								Help:       "Source and target image references.",
+								Positional: 2,
 							},
 						},
 					},
@@ -279,6 +295,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 								Type:    "string",
 								Help:    "Pull image before running.",
 								Default: "missing",
+								Choices: []string{
+									"always",
+									"missing",
+									"never",
+								},
+								Validate: cli.EnumValidate,
 							},
 							{
 								Name:    "tty",
@@ -432,6 +454,21 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 								Name: "internal",
 								Type: "bool",
 								Help: "Restrict external access to the network.",
+							},
+							{
+								Name: "gateway-mac",
+								Type: "net.HardwareAddr",
+								Help: "Assign a preferred MAC address to the network gateway.",
+							},
+							{
+								Name: "subnet",
+								Type: "net.IPNet",
+								Help: "Allocate addresses from this subnet.",
+							},
+							{
+								Name: "ip-range",
+								Type: "net.IPNet",
+								Help: "Restrict dynamic allocation to this subrange.",
 							},
 							{
 								Name:       "name",
@@ -700,6 +737,21 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 
 			ctx = context.WithValue(ctx, cli.Parent{}, "/image/pull")
 			ctx = context.WithValue(ctx, cli.Args("/image/pull"), s)
+		case "/image/tag":
+			s := ImageTagArgs{}
+
+			if p := cmd.Get("references"); p != nil && p.Value != nil {
+				s.References = p.Value.([]string)
+			}
+
+			f := cmd.Handler.(func(context.Context, ImageTagArgs) error)
+			err := errors.Join(f(ctx, s), cmd.Cleanup())
+			if err != nil {
+				return cmds, err
+			}
+
+			ctx = context.WithValue(ctx, cli.Parent{}, "/image/tag")
+			ctx = context.WithValue(ctx, cli.Args("/image/tag"), s)
 		case "/image/rm":
 			s := ImageRmArgs{}
 
@@ -917,6 +969,18 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 
 			if p := cmd.Get("internal"); p != nil && p.Value != nil {
 				s.Internal = p.Value.(bool)
+			}
+
+			if p := cmd.Get("gateway-mac"); p != nil && p.Value != nil {
+				s.GatewayMAC = p.Value.(net.HardwareAddr)
+			}
+
+			if p := cmd.Get("subnet"); p != nil && p.Value != nil {
+				s.Subnet = p.Value.(net.IPNet)
+			}
+
+			if p := cmd.Get("ip-range"); p != nil && p.Value != nil {
+				s.IPRange = p.Value.(net.IPNet)
 			}
 
 			if p := cmd.Get("name"); p != nil && p.Value != nil {

@@ -1,0 +1,20 @@
+Usage: 
+
+A self-sufficient runtime for containers
+
+Options:
+  --api-version    Set the API version to use. (string)
+  --config         Location of client configuration files. (string, labels: path=creatable, path=clean)
+  --debug          Enable debug mode. (bool)
+  --host           Daemon socket to connect to. ([]string, default: unix:///var/run/docker.sock)
+  --tls            Use TLS. (bool)
+  --tlscacert      Trust certs signed only by this CA. (string, labels: path=file, path=creatable, path=clean)
+
+Subcommands:
+  image            Manage images
+  container        Manage containers
+  network          Manage networks
+  volume           Manage volumes
+  system           Manage Docker
+  version          RunVersion shows the Docker version information.
+

@@ -1,0 +1,1 @@
+docker api-version= config=config.json debug=false host=unix:///var/run/docker.sock tls=false tlscacert=

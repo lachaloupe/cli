@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 type ContainerLsArgs struct {
@@ -66,6 +67,9 @@ type ContainerRunArgs struct {
 	Rm bool
 
 	// Pull image before running.
+	//cli:enum=always
+	//cli:enum=missing
+	//cli:enum=never
 	//cli:default=missing
 	Pull string
 
@@ -93,8 +97,22 @@ type ContainerRunArgs struct {
 
 // RunContainerRun runs a command in a new container.
 func RunContainerRun(ctx context.Context, args ContainerRunArgs) error {
-	fmt.Println("container run")
-	fmt.Println(args)
+	fmt.Printf(
+		"container-run detach=%t env=%s env-file=%s interactive=%t name=%s publish=%s rm=%t pull=%s tty=%t volume=%s workdir=%s image=%s command=%s\n",
+		args.Detach,
+		strings.Join(args.Env, ","),
+		strings.Join(args.EnvFile, ","),
+		args.Interactive,
+		args.Name,
+		strings.Join(args.Publish, ","),
+		args.Rm,
+		args.Pull,
+		args.Tty,
+		strings.Join(args.Volume, ","),
+		args.Workdir,
+		args.Image,
+		strings.Join(args.Command, " "),
+	)
 	return nil
 }
 

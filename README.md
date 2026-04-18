@@ -2,25 +2,26 @@
 
 Generate command-line interfaces from Go code.
 
+`cligen` reads a `cli.Command`, infers the CLI surface from your handler signature, and writes the generated glue into `*.cli.go`.
+
 ## Install
 
 ```bash
-# add the runtime package to your project
+# runtime dependency used by the generated CLI
 go get github.com/lachaloupe/cli
 
-# add the generator as a project-local tool
+# tool-only dependency used by go generate
 go get -tool github.com/lachaloupe/cli/cmd/cligen
 ```
 
 ## Quick start
-
-Here's a minimal complete working example:
 
 ```go
 package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/lachaloupe/cli"
 )
@@ -36,6 +37,7 @@ type Args struct {
 }
 
 func Run(ctx context.Context, args Args) error {
+	fmt.Println("hello", args.Name)
 	return nil
 }
 
@@ -45,223 +47,453 @@ func main() {
 ```
 
 ```bash
-# build it
+# generate app.cli.go
 go generate ./...
+
+# build the binary
 go build
 
 # run it
-app --name alice
+./app --name alice
 ```
 
-## Features
+See [01-minimal](./cmd/cligen/testdata/01-minimal).
 
-### 1. Flags are inferred from struct fields used by the handler
+## How it works
+
+Start with a `cli.Command` and a handler. If the handler takes an argument struct, `cligen` inspects that struct and turns its fields into flags or positional arguments. Comments become help text. Then `CLI.Main()` runs the generated parser and calls your handler.
+
+## From Go fields to CLI UX
+
+This:
 
 ```go
 type Args struct {
-	OutputFile string
-	DryRun     bool
-}
-
-func Run(ctx context.Context, args Args) error {
-	...
-}
-```
-
-This becomes:
-
-```bash
-app --output-file result.txt --dry-run
-```
-
-- Field names are converted to kebab-case automatically.
-- Command line is parsed and strings are converted to the field's type.
-
-### 2. Help text comes from comments
-
-```go
-type Args struct {
-	// Write to this file.
-	Output string
-}
-
-// Convert one file into another.
-func Run(ctx context.Context, args Args) error {
-	...
-}
-```
-
-Will extract comments from the handler and from fields:
-
-```
-Usage: app
-
-Convert one file into another.
-
-Options:
-  --output         Write to this file. (string)
-```
-
-### 3. Positional arguments are explicit
-
-```go
-type Args struct {
-	//cli:arg
-	Pattern string
-
-	//cli:arg
-	Sources []string
-
-	//cli:arg=2
-	Position []float
-}
-```
-
-This accepts:
-
-```bash
-app error ./cmd ./internal ./local 1.0 2.0
-```
-
-- `//cli:arg` with non-slice type consumes one value.
-- `//cli:arg` with slice type consumes the remaining values unless specified.
-
-### 4. Required arguments are declared in code
-
-```go
-type Args struct {
+	// Pattern to search for.
 	//cli:required
 	//cli:arg
 	Pattern string
-}
-```
 
-### 5. Defaults are declared next to the field
+	// Files or directories to search in.
+	//cli:arg
+	Paths []string
 
-```go
-type Args struct {
+	// Match case-insensitively.
+	//cli:alias=i
+	IgnoreCase bool
+
+	// Stop after this many matches.
+	//cli:alias=m
 	//cli:default=10
 	MaxCount uint
 }
 ```
 
-This behaves as if the user passed:
+becomes a CLI like:
 
 ```bash
-app --max-count 10
+# pattern and paths are positional
+./app error ./cmd ./internal
+
+# flags come from the other fields
+./app error . -i -m 25
+
+# generated help reflects comments and defaults
+./app --help
 ```
 
-Default values also support basic environment expansion.
-Multiple `//cli:default=` directives can be provided.
-The first expanded value that is not empty is used as the default.
-For example:
+This is the core model:
+
+- any struct fields become CLI typed inputs (not just exported ones)
+- field names become kebab-case flags
+- fields can be made positional by using the `//cli:arg` directive
+- comments become help text
+
+See [02-simple](./cmd/cligen/testdata/02-simple).
+
+## Directives
+
+These directives shape the generated CLI.
+
+### Core directives
+
+| Directive | Meaning |
+| --- | --- |
+| `//cli:arg` | Make the field positional. A scalar consumes one value. A slice consumes the remaining values. |
+| `//cli:arg=N` | Make the field positional and consume exactly `N` values. |
+| `//cli:arg=-1` | For slice fields, consume all remaining positional values. |
+| `//cli:required` | Require the argument to be present. |
+| `//cli:alias=x` | Add a short or alternate name. On command handlers, it adds a command alias. |
+| `//cli:default=value` | Set a default value. Multiple defaults are allowed and are tried in order. |
+| `//cli:enum` | Discover enum choices from `Strings() []string`. |
+| `//cli:enum=value` | Add an allowed enum choice. |
+| `//cli:path=...` | Apply path validation to `string` and `[]string` fields. |
+
+### Path directives
+
+| Directive | Meaning |
+| --- | --- |
+| `//cli:path=exists` | Path must exist. |
+| `//cli:path=not-exists` | Path must not exist. |
+| `//cli:path=dir` | Path must be a directory. |
+| `//cli:path=file` | Path must be a regular file. |
+| `//cli:path=mkdir` | Create the directory before validation. |
+| `//cli:path=creatable` | Parent directory must exist and be writable. |
+| `//cli:path=readable` | Path must be readable. |
+| `//cli:path=writeable` | Path must be writable. |
+| `//cli:path=symlink` | Path must be a symlink. |
+| `//cli:path=abs` | Path must be absolute. |
+| `//cli:path=rel` | Path must be relative. |
+| `//cli:path=exec` | Path must be executable. |
+| `//cli:path=clean` | Path must be lexically clean. |
+| `//cli:path=empty` | Path must be an empty directory. |
+| `//cli:path=glob` | Value must be a valid glob pattern. |
+| `//cli:path=.ext` | Path must use one of the allowed file extensions. |
+
+See [07-cp](./cmd/cligen/testdata/07-cp).
+
+## Enums
+
+Enum handling is opt-in.
+
+- add `//cli:enum` to discover choices from `Strings() []string`
+- non-native types can supply choices by implementing `Strings() []string`
+- add one or more `//cli:enum=value` directives to define or extend the choice list
+
+This works well with named types that already implement `encoding.TextUnmarshaler`.
 
 ```go
+type Mode string
+
+func (Mode) Strings() []string { return []string{"fast", "safe"} }
+
+func (m *Mode) UnmarshalText(text []byte) error { ... }
+
 type Args struct {
-	//cli:default=$XDG_DATA_HOME/my-app
-	//cli:default=$HOME/.local/share/my-app
-	DataDir string
+	//cli:enum
+	Mode Mode
+
+	//cli:enum=text
+	//cli:enum=json
+	Format string
 }
 ```
 
-And it's also possible to supply a `New` constructor.
+See [06-git](./cmd/cligen/testdata/06-git).
+
+## Native type parsing
+
+Built-in scalar types are parsed automatically, and so are slices of those types. `encoding.TextUnmarshaler` types are supported too, which makes common standard-library types work out of the box.
+
+Examples include:
+
+- `time.Duration`
+- `url.URL`
+- `mail.Address`
+- `net.IPNet`
+- `net.HardwareAddr`
+
+```bash
+./app --timeout 5s --proxy http://proxy.internal:8080 --url https://example.com/upload
+```
+
+See [05-curl](./cmd/cligen/testdata/05-curl).
+
+## Slices
+
+Slices are first-class CLI inputs.
+
+- slice flags append one value per occurrence
+- slice positional arguments can consume the remaining values
+- slice defaults use CSV syntax
+
+```bash
+./app --percentiles 90 --percentiles 99 120 150 180 300
+```
+
+See [09-percentile](./cmd/cligen/testdata/09-percentile).
+
+## Parser behavior
+
+Common forms are supported:
+
+```bash
+./app --name alice
+./app --name=alice
+./app -v
+./app -v=false
+./app -- -1 -2
+```
+
+`--` stops flag parsing, which is useful when positional values start with `-`.
+
+## Commands and handler shapes
+
+Commands are declared as a tree. A handler may take only `context.Context`, or `context.Context` plus an args struct.
 
 ```go
 var CLI = cli.Command{
-	Handler: Run,
-	New:     NewArgs,
+	Commands: []*cli.Command{
+		{
+			Name:    "login",
+			Handler: RunLogin,
+		},
+		{
+			Name:    "logout",
+			Handler: RunLogout,
+		},
+	},
 }
 
-func NewArgs() Args {
-	return Args{
-		Format: "json",
-	}
-}
+func RunLogin(ctx context.Context, args LoginArgs) error { ... }
+func RunLogout(ctx context.Context) error { ... }
 ```
 
-- The constructor `New` is called first.
-- Then, any default value directive is applied.
-- And finally, parsed flags supplied by the user are applied last.
+That gives you a command tree such as:
 
-### 6. Short and alternate flag names are supported
+```bash
+./app login --user alice --password secret
+./app logout
+```
+
+Parent command flags stay available under subcommands, which lets you define global flags once at the root and reuse them across the tree.
+
+See [03-commands](./cmd/cligen/testdata/03-commands).
+
+## Context values
+
+Handlers always receive a `context.Context`. The generated code uses it for two things:
+
+- `cli.Parent{}` stores the current command path
+- `cli.Args(path)` stores the parsed args for a command path
+
+That means a subcommand can read its own args or reach back to parent or root args when it needs shared configuration.
 
 ```go
-type Args struct {
-	//cli:alias=i
-	//cli:alias=ignore
-	IgnoreCase bool
-
-	//cli:alias=m
-	MaxCount uint
-}
+rootArgs := ctx.Value(cli.Args("/")).(RootArgs)
+loginArgs := ctx.Value(cli.Args("/login")).(LoginArgs)
 ```
 
-This accepts:
+Any command path works here, not just `/`. Use the path for the command whose parsed args you want to access.
+
+See [03-commands](./cmd/cligen/testdata/03-commands).
+
+## Defaults
+
+Defaults live next to the field.
+
+You can provide more than one `//cli:default=...` directive. They are evaluated in order, and the first one that expands to a non-empty value is used. This is mainly useful for environment-based fallbacks.
+
+For example:
+
+```go
+//cli:default=$XDG_DATA_HOME/my-app
+//cli:default=$HOME/.local/share/my-app
+DataDir string
+```
+
+If `XDG_DATA_HOME` is set and not empty, it wins. Otherwise `HOME` is tried next. If neither expands to a non-empty value, no default is applied.
+
+Slice defaults use CSV syntax:
+
+```go
+//cli:default=50,95,99
+Percentiles []float64
+```
+
+At the command line:
 
 ```bash
-app --ignore -m 5
+# append values
+./app --percentiles 90 --percentiles 99
+
+# replace the whole slice
+./app --percentiles "[90,99]"
+
+# clear the slice
+./app --percentiles "[]"
 ```
 
-### 7. Native value resolvers can expand files and provider-backed values
+See [09-percentile](./cmd/cligen/testdata/09-percentile).
 
-Any raw CLI value can be resolved before it is parsed into the target Go type.
+## Value resolution
 
-By default, a value starting with `@` reads the content of a file:
+Before parsing, raw values can be resolved. By default:
+
+- `@path` reads from a file
+- `//cli:default=$NAME` expands an environment variable
+
+```go
+//cli:default=$GIT_MESSAGE
+//cli:default=@COMMIT_EDITMSG
+Message string
+```
+
+This makes flows like these possible:
 
 ```bash
-app --config @./config.json
-app --token @/run/secrets/api-token
+# read the request body from a file
+./app --data @payload.txt https://example.com/upload
+
+# use env first, then fall back to a file
+./app commit
 ```
 
-This works for flags, positional arguments, and `//cli:default=` values.
-The resolved text is then parsed as if the user had typed it directly.
+Note: use `@@value` to pass a literal leading `@`.
 
-To pass a literal value starting with `@`, escape it with another `@`:
+See [06-git](./cmd/cligen/testdata/06-git).
+
+## `io.Reader` inputs
+
+`io.Reader` is a native argument type. Values can point to:
+
+- a local file
+- `-` for stdin
+- `file://`, `http://`, or `https://` URLs
+- `s3://` URLs when generated with the AWS provider
 
 ```bash
-app --message @@hello
+./app app.log worker.log
+./app -
+./app https://example.com/file.txt
 ```
 
-This behaves as if the user passed:
+See [08-head](./cmd/cligen/testdata/08-head).
 
-```bash
-app --message @hello
-```
+## AWS provider
 
-Provider-backed native values can be generated too.
-For AWS support, invoke `cligen` with `--provider aws`:
+Generate provider-aware code with:
 
 ```go
 //go:generate go tool cligen --provider aws
 ```
 
-That enables:
+That enables AWS-backed native values such as:
 
 ```bash
-app --db-url @aws:ssm:/my-app/db-url
-app --api-key @aws:secret:my-app/api-key
+./app @aws:ssm:/my-app/config
+./app @aws:secret:my-app/api-key
+./app s3://my-bucket/object.txt
 ```
 
-The generated code imports the AWS SDK directly, so the consuming module must add those dependencies itself.
+The generated code imports AWS SDK packages, so the consuming module must add those dependencies.
 
-### 8. Path constraints can be declared next to string arguments
+See [11-aws](./cmd/cligen/testdata/11-aws).
+
+## Runtime hooks
+
+The generated CLI is still just a `cli.Command`, so you can customize runtime behavior when needed.
+
+| Hook | Purpose |
+| --- | --- |
+| `New` | Build the initial args value before defaults and user input are applied. |
+| `Lookup` | Rewrite raw string values before built-in resolution and parsing. |
+| `Open` | Rewrite raw values for `io.Reader` fields before file or URL resolution. |
+
+### `New`
+
+`New` seeds the initial args value before defaults and user input are applied.
 
 ```go
-type Args struct {
-	//cli:path=exists
-	//cli:path=file
-	Input string
+var CLI = cli.Command{
+	Handler: RunHead,
+	New:     NewArgs,
+}
 
-	//cli:path=mkdir
-	//cli:path=empty
-	Scratch string
+func NewArgs() Args {
+	return Args{
+		Files: []io.Reader{os.Stdin},
+	}
 }
 ```
 
-### 9. An opt-in built-in `version` command is available
+In [08-head](./cmd/cligen/testdata/08-head), this makes standard input the default when no files are passed.
 
-If `cli.Version` is set, generated CLIs automatically add a root `version` command.
-This is intended for link-time injection in CI:
+### `Lookup`
+
+`Lookup` rewrites raw string values before built-in parsing runs. In practice, this is a string value provider hook.
+
+The built-in resolver already handles `@path` file reads. `Lookup` exists for cases where the raw value should come from somewhere else before it is parsed into the target Go type.
+
+The main shipped example is the AWS provider. When you generate with `--provider aws`, `cligen` installs a resolver under the hood so values like these are turned into plain strings before parsing:
+
+```bash
+./app --db-url @aws:ssm:/my-app/db-url
+./app --api-key @aws:secret:my-app/api-key
+```
+
+See [11-aws](./cmd/cligen/testdata/11-aws).
+
+### `Open`
+
+`Open` rewrites raw values for `io.Reader` fields before built-in reader handling runs. In practice, this is a reader provider hook.
+
+By default, `io.Reader` already understands:
+
+- `-`
+- local file paths
+- `file://`
+- `http://`
+- `https://`
+
+`Open` exists for cases where a value should produce a reader through another transport or container format first, such as S3 objects, compressed inputs, or archive entries.
+
+The main shipped example is again the AWS provider. When generated with `--provider aws`, `cligen` installs a reader resolver so this works:
+
+```bash
+./app s3://my-bucket/object.txt
+```
+
+See [11-aws](./cmd/cligen/testdata/11-aws).
+
+### `Arg.Parse`
+
+`Arg.Parse` is a lower-level runtime hook for manual `cli.Command` definitions. Use it when a value should parse into a custom type or syntax that the built-in parser does not know about.
+
+For example, to parse a date in `YYYY-MM-DD` form:
+
+```go
+cmd := cli.Command{
+	Args: []*cli.Arg{
+		{
+			Name: "day",
+			Type: "time.Time",
+			Parse: func(s string) (any, error) {
+				return time.Parse("2006-01-02", s)
+			},
+		},
+	},
+}
+```
+
+### `Arg.Validate`
+
+`Arg.Validate` is the matching lower-level validation hook. It runs after parsing and is useful for domain checks that go beyond type conversion.
+
+For example, to require an AWS ARN shape:
+
+```go
+cmd := cli.Command{
+	Args: []*cli.Arg{
+		{
+			Name: "role-arn",
+			Type: "string",
+			Validate: func(arg *cli.Arg, s string) error {
+				if !strings.HasPrefix(s, "arn:aws:") {
+					return fmt.Errorf("%s must be an AWS ARN", arg.Name)
+				}
+				return nil
+			},
+		},
+	},
+}
+```
+
+## Built-in version command
+
+If `cli.Version` is set, generated CLIs add a root `version` command automatically.
+
+It is meant to be injected at build time:
 
 ```bash
 go build -ldflags="-X github.com/lachaloupe/cli.Version=v1.2.3"
@@ -270,189 +502,41 @@ go build -ldflags="-X github.com/lachaloupe/cli.Version=v1.2.3"
 Then:
 
 ```bash
-app version
+./app version
 ```
 
-prints a small version report such as:
+prints:
 
 ```text
-go1.26.1 darwin/arm64
+go1.26.2 darwin/arm64
 v1.2.3
 ```
 
-If `cli.Version` is left empty, no built-in `version` command is added.
-If your CLI already defines its own `version` command, that command is preserved.
+If `cli.Version` is empty, no built-in version command is added. If your CLI already defines its own `version` command, that one is kept.
 
-This accepts existing files for `Input`, and ensures `Scratch` exists as an empty directory.
-The supported path directives are:
+See [01-minimal](./cmd/cligen/testdata/01-minimal).
 
-- `//cli:path=exists`
-- `//cli:path=not-exists`
-- `//cli:path=dir`
-- `//cli:path=file`
-- `//cli:path=mkdir`
-- `//cli:path=creatable`
-- `//cli:path=readable`
-- `//cli:path=writeable`
-- `//cli:path=symlink`
-- `//cli:path=abs`
-- `//cli:path=rel`
-- `//cli:path=exec`
-- `//cli:path=clean`
-- `//cli:path=empty`
-- `//cli:path=glob`
-- `//cli:path=.ext`
+## Example suite
 
-Multiple `//cli:path=.ext` directives are allowed and are treated as OR checks.
-These directives only apply to `string` and `[]string` fields, and they can be combined.
-Under the hood, generated code attaches labels to the argument and wires `cli.PathValidate` into the generic per-argument validation hook.
+The examples under [cmd/cligen/testdata](./cmd/cligen/testdata) are also golden tests. Their checked-in `main.cli.go` files must match freshly generated output.
 
-### 9. Commands are declared as a tree
+| Example | What it showcases |
+| --- | --- |
+| [01-minimal](./cmd/cligen/testdata/01-minimal) | Smallest generated CLI, help text, built-in version command |
+| [02-simple](./cmd/cligen/testdata/02-simple) | Positional arguments, required values, aliases, defaults |
+| [03-commands](./cmd/cligen/testdata/03-commands) | Subcommands, command aliases, handlers with and without args |
+| [04-docker](./cmd/cligen/testdata/04-docker) | Larger command tree, inherited root flags, fixed and trailing positionals |
+| [05-curl](./cmd/cligen/testdata/05-curl) | Native type parsing, durations, URLs, path validation |
+| [06-git](./cmd/cligen/testdata/06-git) | Value resolution from env and files, command nesting |
+| [07-cp](./cmd/cligen/testdata/07-cp) | Path directives, globs, relative and absolute path constraints |
+| [08-head](./cmd/cligen/testdata/08-head) | `New`, `io.Reader`, stdin defaults |
+| [09-percentile](./cmd/cligen/testdata/09-percentile) | Slice flags, slice defaults, numeric parsing |
+| [10-sync](./cmd/cligen/testdata/10-sync) | Rich path validation across many path labels |
+| [11-aws](./cmd/cligen/testdata/11-aws) | AWS provider, S3-backed readers |
 
-```go
-var CLI = cli.Command{
-	Commands: []*cli.Command{
-		{
-			Name: "login",
-			Handler: RunLogin,
-		},
-		{
-			Name: "logout",
-			Handler: RunLogout,
-		},
-	},
-}
-```
-
-This accepts:
+Run the end-to-end example suite with:
 
 ```bash
-app login --user alice
-app logout
+cd cmd/cligen
+go test -run TestUsingExamples -v
 ```
-
-### 10. Commands can have aliases
-
-```go
-//cli:alias=signout
-func RunLogout(ctx context.Context) error {
-	...
-}
-```
-
-### 11. Handlers may or may not take an argument struct
-
-Without args:
-
-```go
-func RunLogout(ctx context.Context) error {
-	...
-}
-```
-
-With args:
-
-```go
-func RunLogin(ctx context.Context, args LoginArgs) error {
-	...
-}
-```
-
-### 14. Native types and `encoding.TextUnmarshaler`
-
-Native scalar Go types are parsed automatically.
-Slices are supported too.
-For other types, the parser assumes the value implements `encoding.TextUnmarshaler`.
-This includes common standard-library types such as:
-
-- `time.Time`
-- `net.IP`
-- `netip.Addr`
-- `netip.AddrPort`
-- `netip.Prefix`
-- `regexp.Regexp`
-- `big.Int`
-- `big.Rat`
-- `big.Float`
-- `x509.OID`
-- `slog.Level`
-- `slog.LevelVar`
-
-Example:
-
-```go
-type Args struct {
-	Timeout  time.Duration
-	Origin   url.URL
-	Subnet   net.IPNet
-	MAC      net.HardwareAddr
-	From     mail.Address
-	When     time.Time
-	Resolver netip.Addr
-	Pattern  regexp.Regexp
-}
-```
-
-```bash
-app \
-  --timeout 500ms \
-  --origin https://example.com/api \
-  --subnet 192.0.2.1/24 \
-  --mac 01:23:45:67:89:ab \
-  --from 'Alice <alice@example.com>' \
-  --when 2026-04-05T12:00:00Z \
-  --resolver 1.1.1.1 \
-  --pattern '^demo$'
-```
-
-`io.Reader` is also supported as a native field type.
-Its value is treated as:
-
-- a filename to open
-- `-` to use `stdin`
-- a `file://`, `http://`, or `https://` URI
-- an `s3://` URI when code is generated with `--provider aws`
-
-Example:
-
-```go
-type Args struct {
-	Input io.Reader
-}
-```
-
-```bash
-app --input payload.json
-app --input -
-app --input file:///tmp/payload.json
-app --input https://example.com/payload.json
-app --input s3://my-bucket/payload.json
-```
-
-### 15. The runtime parser handles common CLI forms
-
-Supported forms include:
-
-```bash
-app --name alice
-app --name=alice
-app -v
-app -v=false
-app -- -1 -2
-```
-
-`--` stops flag parsing, which is useful for negative positional values.
-
-## Examples
-
-There are more examples [here](./cmd/cligen/testdata).
-
-## How it works
-
-- The `cli.Command` variable is parsed by `cligen` when invoked by `go generate`
-- It finds the specified `Handler`
-- The `struct` parameter of that function is used to infer CLI arguments
-- An helper function is generated in `$GOFILE.cli.go`
-- You have your CLI!
-- At runtime, the `Main` function calls that helper function
-- The `cli` parser fills structs from `os.Args` and calls your `Handler`

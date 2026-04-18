@@ -1,0 +1,2 @@
+docker api-version= config= debug=false host=unix:///var/run/docker.sock tls=false tlscacert=
+container-run detach=true env=APP_ENV=dev env-file= interactive=false name=web publish=8080:80 rm=false pull=missing tty=false volume= workdir= image=nginx:latest command=echo hello

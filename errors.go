@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
 )
 
 var (
@@ -32,7 +33,7 @@ var (
 	ErrPathSymlink      = errors.New("path must be a symlink")
 )
 
-// ParseError reports a command-line parsing failure.
+// ParseError reports why parsing failed and, when available, which input caused it.
 type ParseError struct {
 	Kind  error
 	Name  string
@@ -73,7 +74,7 @@ func (err *ArgError) Unwrap() error {
 	return err.Err
 }
 
-// PathError reports that a path argument violates a path constraint.
+// PathError reports that a path argument violates one of its configured path constraints.
 type PathError struct {
 	Kind  error
 	Arg   string
@@ -84,6 +85,18 @@ type PathError struct {
 }
 
 func (err *PathError) Error() string {
+	detail := func() string {
+		if err.Err == nil {
+			return ""
+		}
+
+		if errors.Is(err.Err, os.ErrPermission) {
+			return "permission denied"
+		}
+
+		return err.Err.Error()
+	}
+
 	switch err.Kind {
 	case ErrPathAbs:
 		return fmt.Sprintf("%q must reference an absolute path", err.Arg)
@@ -108,11 +121,11 @@ func (err *PathError) Error() string {
 	case ErrPathParentDir:
 		return fmt.Sprintf("%q must have a directory parent", err.Arg)
 	case ErrPathParentWrite:
-		return fmt.Sprintf("%q must have a writeable parent directory: %v", err.Arg, err.Err)
+		return fmt.Sprintf("%q must have a writeable parent directory: %s", err.Arg, detail())
 	case ErrPathReadable:
-		return fmt.Sprintf("%q must reference a readable path: %v", err.Arg, err.Err)
+		return fmt.Sprintf("%q must reference a readable path: %s", err.Arg, detail())
 	case ErrPathWriteable:
-		return fmt.Sprintf("%q must reference a writeable path: %v", err.Arg, err.Err)
+		return fmt.Sprintf("%q must reference a writeable path: %s", err.Arg, detail())
 	case ErrPathExecutable:
 		return fmt.Sprintf("%q must reference an executable path", err.Arg)
 	case ErrPathNotExists:

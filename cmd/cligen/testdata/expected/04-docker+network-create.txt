@@ -1,0 +1,2 @@
+docker api-version= config= debug=false host=unix:///var/run/docker.sock tls=false tlscacert=
+network-create driver=bridge internal=false gateway-mac=02:42:ac:11:00:02 subnet=10.0.0.0/24 ip-range=10.0.0.0/25 labels=[] name=demo-net

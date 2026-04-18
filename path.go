@@ -13,13 +13,36 @@ func PathValidate(arg *Arg, path string) error {
 		return nil
 	}
 
+	writable := func(path string, info os.FileInfo) error {
+		if info.IsDir() {
+			f, err := os.CreateTemp(path, ".cli-writeable-*")
+			if err != nil {
+				return err
+			}
+
+			name := f.Name()
+			if err := f.Close(); err != nil {
+				_ = os.Remove(name)
+				return err
+			}
+
+			return os.Remove(name)
+		}
+
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
+		if err != nil {
+			return err
+		}
+
+		return f.Close()
+	}
+
 	exts := []string{}
+	mkdir := false
 
 	for _, label := range labels {
 		if label == "mkdir" {
-			if err := os.MkdirAll(path, 0755); err != nil {
-				return err
-			}
+			mkdir = true
 			continue
 		}
 
@@ -78,42 +101,48 @@ func PathValidate(arg *Arg, path string) error {
 		}
 	}
 
-	info, statErr := os.Stat(path)
+	if mkdir {
+		if err := os.MkdirAll(path, 0755); err != nil {
+			return err
+		}
+	}
+
+	info, err := os.Stat(path)
 	for _, label := range labels {
 		switch label {
 		case "exists":
-			if statErr != nil {
-				if os.IsNotExist(statErr) {
+			if err != nil {
+				if os.IsNotExist(err) {
 					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
-				return statErr
+				return err
 			}
 		case "dir":
-			if statErr != nil {
-				if os.IsNotExist(statErr) {
+			if err != nil {
+				if os.IsNotExist(err) {
 					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
-				return statErr
+				return err
 			}
 			if !info.IsDir() {
 				return &PathError{Kind: ErrPathDir, Arg: arg.Name, Path: path, Label: label}
 			}
 		case "file":
-			if statErr != nil {
-				if os.IsNotExist(statErr) {
+			if err != nil {
+				if os.IsNotExist(err) {
 					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
-				return statErr
+				return err
 			}
 			if !info.Mode().IsRegular() {
 				return &PathError{Kind: ErrPathFile, Arg: arg.Name, Path: path, Label: label}
 			}
 		case "empty":
-			if statErr != nil {
-				if os.IsNotExist(statErr) {
+			if err != nil {
+				if os.IsNotExist(err) {
 					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
-				return statErr
+				return err
 			}
 			if !info.IsDir() {
 				return &PathError{Kind: ErrPathEmpty, Arg: arg.Name, Path: path, Label: label}
@@ -126,26 +155,26 @@ func PathValidate(arg *Arg, path string) error {
 				return &PathError{Kind: ErrPathEmpty, Arg: arg.Name, Path: path, Label: label}
 			}
 		case "creatable":
-			parent := filepath.Dir(path)
-			parentInfo, err := os.Stat(parent)
+			parentPath := filepath.Dir(path)
+			parent, err := os.Stat(parentPath)
 			if err != nil {
 				if os.IsNotExist(err) {
 					return &PathError{Kind: ErrPathParentExists, Arg: arg.Name, Path: path, Label: label}
 				}
 				return err
 			}
-			if !parentInfo.IsDir() {
+			if !parent.IsDir() {
 				return &PathError{Kind: ErrPathParentDir, Arg: arg.Name, Path: path, Label: label}
 			}
-			if err := ensureWriteable(parent, parentInfo); err != nil {
+			if err := writable(parentPath, parent); err != nil {
 				return &PathError{Kind: ErrPathParentWrite, Arg: arg.Name, Path: path, Label: label, Err: err}
 			}
 		case "readable":
-			if statErr != nil {
-				if os.IsNotExist(statErr) {
+			if err != nil {
+				if os.IsNotExist(err) {
 					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
-				return statErr
+				return err
 			}
 			if info.IsDir() {
 				if _, err := os.ReadDir(path); err != nil {
@@ -161,21 +190,21 @@ func PathValidate(arg *Arg, path string) error {
 				}
 			}
 		case "writeable":
-			if statErr != nil {
-				if os.IsNotExist(statErr) {
+			if err != nil {
+				if os.IsNotExist(err) {
 					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
-				return statErr
+				return err
 			}
-			if err := ensureWriteable(path, info); err != nil {
+			if err := writable(path, info); err != nil {
 				return &PathError{Kind: ErrPathWriteable, Arg: arg.Name, Path: path, Label: label, Err: err}
 			}
 		case "exec":
-			if statErr != nil {
-				if os.IsNotExist(statErr) {
+			if err != nil {
+				if os.IsNotExist(err) {
 					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
-				return statErr
+				return err
 			}
 			if info.Mode()&0111 == 0 {
 				return &PathError{Kind: ErrPathExecutable, Arg: arg.Name, Path: path, Label: label}
@@ -206,60 +235,4 @@ func PathValidate(arg *Arg, path string) error {
 	}
 
 	return nil
-}
-
-func isCleanPath(path string) bool {
-	volume := filepath.VolumeName(path)
-	rest := path[len(volume):]
-	depth := 0
-	if filepath.IsAbs(path) {
-		depth = 1
-	}
-
-	start := 0
-	for i := 0; i <= len(rest); i++ {
-		if i != len(rest) && rest[i] != filepath.Separator {
-			continue
-		}
-
-		part := rest[start:i]
-		start = i + 1
-
-		switch part {
-		case "", ".":
-		case "..":
-			if depth <= 1 {
-				return false
-			}
-			depth--
-		default:
-			depth++
-		}
-	}
-
-	return true
-}
-
-func ensureWriteable(path string, info os.FileInfo) error {
-	if info.IsDir() {
-		f, err := os.CreateTemp(path, ".cli-writeable-*")
-		if err != nil {
-			return err
-		}
-
-		name := f.Name()
-		if err := f.Close(); err != nil {
-			_ = os.Remove(name)
-			return err
-		}
-
-		return os.Remove(name)
-	}
-
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
-	if err != nil {
-		return err
-	}
-
-	return f.Close()
 }

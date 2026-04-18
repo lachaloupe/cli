@@ -1,0 +1,10 @@
+Usage: 
+
+Run a command
+
+Options:
+  --some-flag      SomeFlag is a flag argument. (string)
+
+Subcommands:
+  version          Show version information.
+

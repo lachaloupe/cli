@@ -1,0 +1,2 @@
+docker api-version= config= debug=false host=unix:///var/run/docker.sock tls=false tlscacert=
+image tag source=alpine:3.20 target=registry.example.com/demo/alpine:latest
