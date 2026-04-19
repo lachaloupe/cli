@@ -6,10 +6,10 @@ replace github.com/lachaloupe/cli => ../../../..
 
 replace github.com/lachaloupe/cli/cmd/cligen => ../..
 
-require github.com/lachaloupe/cli v0.0.0
+require github.com/lachaloupe/cli v0.1.0
 
 require (
-	github.com/lachaloupe/cli/cmd/cligen v0.0.0-20260416182109-daea8fda5c9f // indirect
+	github.com/lachaloupe/cli/cmd/cligen v0.0.0-20260420021711-73d7228cbd26 // indirect
 	golang.org/x/mod v0.34.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/tools v0.43.0 // indirect

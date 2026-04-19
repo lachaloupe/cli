@@ -117,7 +117,7 @@ func TestUsingExamples(t *testing.T) {
 	defer cancel()
 
 	publicNetwork := true
-	if _, err := net.DefaultResolver.LookupHost(networkCtx, "example.com"); err != nil {
+	if _, err := net.DefaultResolver.LookupHost(networkCtx, "google.com"); err != nil {
 		publicNetwork = false
 	}
 
@@ -737,8 +737,8 @@ func TestUsingExamples(t *testing.T) {
 		{
 			name:   "http-and-s3",
 			binary: "11-aws",
-			args:   []string{"https://example.com/", "s3://ont-open-data/gm24385_2020.09/README.md"},
-			env:    []string{"AWS_EC2_METADATA_DISABLED=true"},
+			args:   []string{"https://jsonplaceholder.typicode.com/todos/1/", "s3://ont-open-data/gm24385_2020.09/README.md"},
+			env:    []string{"AWS_EC2_METADATA_DISABLED=true", "AWS_REGION=eu-west-1"},
 			skip:   !publicNetwork,
 		},
 		{
@@ -789,6 +789,10 @@ func TestUsingExamples(t *testing.T) {
 				} else {
 					expected = string(data)
 				}
+			}
+
+			if test.binary == "01-minimal" && test.name == "version" {
+				expected = strings.ReplaceAll(expected, "darwin/arm64", runtime.GOOS+"/"+runtime.GOARCH)
 			}
 
 			got := string(out)

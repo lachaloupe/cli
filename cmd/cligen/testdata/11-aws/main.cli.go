@@ -83,13 +83,16 @@ func resolveNativeReader(ctx context.Context, arg *cli.Arg, value string) (io.Re
 		return nil, true, fmt.Errorf("%s: load AWS config: %w", arg.Name, err)
 	}
 
-	resp, err := s3.NewFromConfig(cfg).GetObject(ctx, &s3.GetObjectInput{
+	resp, err := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.DisableLogOutputChecksumValidationSkipped = true
+	}).GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(u.Host),
 		Key:    aws.String(strings.TrimPrefix(u.Path, "/")),
 	})
 	if err != nil {
 		resp, err = s3.NewFromConfig(cfg, func(o *s3.Options) {
 			o.Credentials = aws.AnonymousCredentials{}
+			o.DisableLogOutputChecksumValidationSkipped = true
 		}).GetObject(ctx, &s3.GetObjectInput{
 			Bucket: aws.String(u.Host),
 			Key:    aws.String(strings.TrimPrefix(u.Path, "/")),

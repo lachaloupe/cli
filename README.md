@@ -1,5 +1,9 @@
 # cli
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/lachaloupe/cli.svg)](https://pkg.go.dev/github.com/lachaloupe/cli)
+[![Go Report Card](https://goreportcard.com/badge/github.com/lachaloupe/cli)](https://goreportcard.com/report/github.com/lachaloupe/cli)
+[![CI](https://github.com/lachaloupe/cli/actions/workflows/test.yml/badge.svg)](https://github.com/lachaloupe/cli/actions/workflows/test.yml)
+
 Generate command-line interfaces from Go code.
 
 `cligen` reads a `cli.Command`, infers the CLI surface from your handler signature, and writes the generated glue into `*.cli.go`.
@@ -8,10 +12,10 @@ Generate command-line interfaces from Go code.
 
 ```bash
 # runtime dependency used by the generated CLI
-go get github.com/lachaloupe/cli
+go get github.com/lachaloupe/cli@v0.1.0
 
 # tool-only dependency used by go generate
-go get -tool github.com/lachaloupe/cli/cmd/cligen
+go get -tool github.com/lachaloupe/cli/cmd/cligen@v0.1.0
 ```
 
 ## Quick start
