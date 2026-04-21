@@ -1,4 +1,4 @@
-package main
+package network
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"net"
 )
 
-type NetworkLsArgs struct {
+type LsArgs struct {
 	// Provide filter values.
 	//cli:alias=f
 	Filter []string
@@ -20,13 +20,13 @@ type NetworkLsArgs struct {
 }
 
 // RunNetworkLs lists networks.
-func RunNetworkLs(ctx context.Context, args NetworkLsArgs) error {
+func RunLs(ctx context.Context, args LsArgs) error {
 	fmt.Println("network ls")
 	fmt.Println(args)
 	return nil
 }
 
-type NetworkCreateArgs struct {
+type CreateArgs struct {
 	// Driver to manage the network.
 	//cli:default=bridge
 	Driver string
@@ -54,7 +54,7 @@ type NetworkCreateArgs struct {
 }
 
 // RunNetworkCreate creates a network.
-func RunNetworkCreate(ctx context.Context, args NetworkCreateArgs) error {
+func RunCreate(ctx context.Context, args CreateArgs) error {
 	fmt.Printf(
 		"network-create driver=%s internal=%t gateway-mac=%s subnet=%s ip-range=%s labels=%s name=%s\n",
 		args.Driver,
@@ -68,15 +68,15 @@ func RunNetworkCreate(ctx context.Context, args NetworkCreateArgs) error {
 	return nil
 }
 
-type NetworkRmArgs struct {
-	// Network names or IDs.
+type RmArgs struct {
+	// Networks to remove.
 	//cli:required
 	//cli:arg
 	Networks []string
 }
 
 // RunNetworkRm removes networks.
-func RunNetworkRm(ctx context.Context, args NetworkRmArgs) error {
+func RunRm(ctx context.Context, args RmArgs) error {
 	fmt.Println("network rm")
 	fmt.Println(args)
 	return nil

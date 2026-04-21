@@ -51,7 +51,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 							var v CleanupMode
 							return &v
 						}()),
-						Validate: cli.EnumValidate,
+						Validate: func(arg *cli.Arg, s string) error {
+							if err := cli.EnumValidate(arg, s); err != nil {
+								return err
+							}
+							return nil
+						},
 					},
 					{
 						Name: "author",
@@ -86,7 +91,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 								"clean",
 							},
 						},
-						Validate: cli.PathValidate,
+						Validate: func(arg *cli.Arg, s string) error {
+							if err := cli.PathValidate(arg, s); err != nil {
+								return err
+							}
+							return nil
+						},
 					},
 					{
 						Name:       "paths",

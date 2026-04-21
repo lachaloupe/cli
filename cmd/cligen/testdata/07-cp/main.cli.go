@@ -53,7 +53,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						".json",
 					},
 				},
-				Validate: cli.PathValidate,
+				Validate: func(arg *cli.Arg, s string) error {
+					if err := cli.PathValidate(arg, s); err != nil {
+						return err
+					}
+					return nil
+				},
 			},
 			{
 				Name: "sources",
@@ -65,7 +70,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						"glob",
 					},
 				},
-				Validate:   cli.PathValidate,
+				Validate: func(arg *cli.Arg, s string) error {
+					if err := cli.PathValidate(arg, s); err != nil {
+						return err
+					}
+					return nil
+				},
 				Positional: -1,
 			},
 			{
@@ -78,7 +88,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						"mkdir",
 					},
 				},
-				Validate:   cli.PathValidate,
+				Validate: func(arg *cli.Arg, s string) error {
+					if err := cli.PathValidate(arg, s); err != nil {
+						return err
+					}
+					return nil
+				},
 				Required:   true,
 				Positional: 1,
 			},

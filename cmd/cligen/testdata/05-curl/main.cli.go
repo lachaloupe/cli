@@ -68,7 +68,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						"clean",
 					},
 				},
-				Validate: cli.PathValidate,
+				Validate: func(arg *cli.Arg, s string) error {
+					if err := cli.PathValidate(arg, s); err != nil {
+						return err
+					}
+					return nil
+				},
 			},
 			{
 				Name: "cacert",
@@ -82,7 +87,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						"clean",
 					},
 				},
-				Validate: cli.PathValidate,
+				Validate: func(arg *cli.Arg, s string) error {
+					if err := cli.PathValidate(arg, s); err != nil {
+						return err
+					}
+					return nil
+				},
 			},
 			{
 				Name: "proxy",

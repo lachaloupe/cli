@@ -29,7 +29,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						"dir",
 					},
 				},
-				Validate: cli.PathValidate,
+				Validate: func(arg *cli.Arg, s string) error {
+					if err := cli.PathValidate(arg, s); err != nil {
+						return err
+					}
+					return nil
+				},
 			},
 			{
 				Name: "workers",
@@ -57,7 +62,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						"empty",
 					},
 				},
-				Validate: cli.PathValidate,
+				Validate: func(arg *cli.Arg, s string) error {
+					if err := cli.PathValidate(arg, s); err != nil {
+						return err
+					}
+					return nil
+				},
 			},
 			{
 				Name: "state",
@@ -68,7 +78,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						"writeable",
 					},
 				},
-				Validate: cli.PathValidate,
+				Validate: func(arg *cli.Arg, s string) error {
+					if err := cli.PathValidate(arg, s); err != nil {
+						return err
+					}
+					return nil
+				},
 			},
 			{
 				Name: "helper",
@@ -79,7 +94,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						"exec",
 					},
 				},
-				Validate: cli.PathValidate,
+				Validate: func(arg *cli.Arg, s string) error {
+					if err := cli.PathValidate(arg, s); err != nil {
+						return err
+					}
+					return nil
+				},
 			},
 			{
 				Name: "lock",
@@ -90,7 +110,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						"not-exists",
 					},
 				},
-				Validate: cli.PathValidate,
+				Validate: func(arg *cli.Arg, s string) error {
+					if err := cli.PathValidate(arg, s); err != nil {
+						return err
+					}
+					return nil
+				},
 			},
 			{
 				Name: "current",
@@ -101,7 +126,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						"symlink",
 					},
 				},
-				Validate: cli.PathValidate,
+				Validate: func(arg *cli.Arg, s string) error {
+					if err := cli.PathValidate(arg, s); err != nil {
+						return err
+					}
+					return nil
+				},
 			},
 			{
 				Name:       "sources",

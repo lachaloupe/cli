@@ -7,6 +7,10 @@ import (
 	"errors"
 	"net"
 
+	"example.com/testcli/container"
+	"example.com/testcli/image"
+	"example.com/testcli/network"
+	"example.com/testcli/volume"
 	"github.com/lachaloupe/cli"
 )
 
@@ -35,7 +39,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						"clean",
 					},
 				},
-				Validate: cli.PathValidate,
+				Validate: func(arg *cli.Arg, s string) error {
+					if err := cli.PathValidate(arg, s); err != nil {
+						return err
+					}
+					return nil
+				},
 			},
 			{
 				Name:    "debug",
@@ -66,7 +75,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						"clean",
 					},
 				},
-				Validate: cli.PathValidate,
+				Validate: func(arg *cli.Arg, s string) error {
+					if err := cli.PathValidate(arg, s); err != nil {
+						return err
+					}
+					return nil
+				},
 			},
 		},
 		Commands: []*cli.Command{
@@ -78,7 +92,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 					{
 						Name:    "ls",
 						Path:    "/image/ls",
-						Handler: RunImageLs,
+						Handler: image.RunLs,
 						Help:    "RunImageLs lists images.",
 						Args: []*cli.Arg{
 							{
@@ -119,7 +133,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 					{
 						Name:    "pull",
 						Path:    "/image/pull",
-						Handler: RunImagePull,
+						Handler: image.RunPull,
 						Help:    "RunImagePull pulls an image.",
 						Args: []*cli.Arg{
 							{
@@ -151,7 +165,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 					{
 						Name:    "tag",
 						Path:    "/image/tag",
-						Handler: RunImageTag,
+						Handler: image.RunTag,
 						Help:    "RunImageTag tags an image into a repository.",
 						Args: []*cli.Arg{
 							{
@@ -165,7 +179,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 					{
 						Name:    "rm",
 						Path:    "/image/rm",
-						Handler: RunImageRm,
+						Handler: image.RunRm,
 						Help:    "RunImageRm removes images.",
 						Args: []*cli.Arg{
 							{
@@ -198,7 +212,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 					{
 						Name:    "ls",
 						Path:    "/container/ls",
-						Handler: RunContainerLs,
+						Handler: container.RunLs,
 						Help:    "RunContainerLs lists containers.",
 						Args: []*cli.Arg{
 							{
@@ -240,7 +254,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 					{
 						Name:    "run",
 						Path:    "/container/run",
-						Handler: RunContainerRun,
+						Handler: container.RunRun,
 						Help:    "RunContainerRun runs a command in a new container.",
 						Args: []*cli.Arg{
 							{
@@ -266,7 +280,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 										"readable",
 									},
 								},
-								Validate: cli.PathValidate,
+								Validate: func(arg *cli.Arg, s string) error {
+									if err := cli.PathValidate(arg, s); err != nil {
+										return err
+									}
+									return nil
+								},
 							},
 							{
 								Name:    "interactive",
@@ -300,7 +319,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 									"missing",
 									"never",
 								},
-								Validate: cli.EnumValidate,
+								Validate: func(arg *cli.Arg, s string) error {
+									if err := cli.EnumValidate(arg, s); err != nil {
+										return err
+									}
+									return nil
+								},
 							},
 							{
 								Name:    "tty",
@@ -338,7 +362,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 					{
 						Name:    "logs",
 						Path:    "/container/logs",
-						Handler: RunContainerLogs,
+						Handler: container.RunLogs,
 						Help:    "RunContainerLogs fetches container logs.",
 						Args: []*cli.Arg{
 							{
@@ -376,7 +400,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 					{
 						Name:    "rm",
 						Path:    "/container/rm",
-						Handler: RunContainerRm,
+						Handler: container.RunRm,
 						Help:    "RunContainerRm removes containers.",
 						Args: []*cli.Arg{
 							{
@@ -410,7 +434,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 					{
 						Name:    "ls",
 						Path:    "/network/ls",
-						Handler: RunNetworkLs,
+						Handler: network.RunLs,
 						Help:    "RunNetworkLs lists networks.",
 						Args: []*cli.Arg{
 							{
@@ -435,7 +459,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 					{
 						Name:    "create",
 						Path:    "/network/create",
-						Handler: RunNetworkCreate,
+						Handler: network.RunCreate,
 						Help:    "RunNetworkCreate creates a network.",
 						Args: []*cli.Arg{
 							{
@@ -482,13 +506,13 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 					{
 						Name:    "rm",
 						Path:    "/network/rm",
-						Handler: RunNetworkRm,
+						Handler: network.RunRm,
 						Help:    "RunNetworkRm removes networks.",
 						Args: []*cli.Arg{
 							{
 								Name:       "networks",
 								Type:       "[]string",
-								Help:       "Network names or IDs.",
+								Help:       "Networks to remove.",
 								Required:   true,
 								Positional: -1,
 							},
@@ -504,7 +528,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 					{
 						Name:    "ls",
 						Path:    "/volume/ls",
-						Handler: RunVolumeLs,
+						Handler: volume.RunLs,
 						Help:    "RunVolumeLs lists volumes.",
 						Args: []*cli.Arg{
 							{
@@ -529,7 +553,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 					{
 						Name:    "create",
 						Path:    "/volume/create",
-						Handler: RunVolumeCreate,
+						Handler: volume.RunCreate,
 						Help:    "RunVolumeCreate creates a volume.",
 						Args: []*cli.Arg{
 							{
@@ -555,7 +579,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 					{
 						Name:    "rm",
 						Path:    "/volume/rm",
-						Handler: RunVolumeRm,
+						Handler: volume.RunRm,
 						Help:    "RunVolumeRm removes volumes.",
 						Args: []*cli.Arg{
 							{
@@ -676,7 +700,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 
 			ctx = context.WithValue(ctx, cli.Parent{}, "/image")
 		case "/image/ls":
-			s := ImageLsArgs{}
+			s := image.LsArgs{}
 
 			if p := cmd.Get("all"); p != nil && p.Value != nil {
 				s.All = p.Value.(bool)
@@ -702,7 +726,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				s.Filter = p.Value.([]string)
 			}
 
-			f := cmd.Handler.(func(context.Context, ImageLsArgs) error)
+			f := cmd.Handler.(func(context.Context, image.LsArgs) error)
 			err := errors.Join(f(ctx, s), cmd.Cleanup())
 			if err != nil {
 				return cmds, err
@@ -711,7 +735,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			ctx = context.WithValue(ctx, cli.Parent{}, "/image/ls")
 			ctx = context.WithValue(ctx, cli.Args("/image/ls"), s)
 		case "/image/pull":
-			s := ImagePullArgs{}
+			s := image.PullArgs{}
 
 			if p := cmd.Get("all-tags"); p != nil && p.Value != nil {
 				s.AllTags = p.Value.(bool)
@@ -729,7 +753,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				s.Image = p.Value.(string)
 			}
 
-			f := cmd.Handler.(func(context.Context, ImagePullArgs) error)
+			f := cmd.Handler.(func(context.Context, image.PullArgs) error)
 			err := errors.Join(f(ctx, s), cmd.Cleanup())
 			if err != nil {
 				return cmds, err
@@ -738,13 +762,13 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			ctx = context.WithValue(ctx, cli.Parent{}, "/image/pull")
 			ctx = context.WithValue(ctx, cli.Args("/image/pull"), s)
 		case "/image/tag":
-			s := ImageTagArgs{}
+			s := image.TagArgs{}
 
 			if p := cmd.Get("references"); p != nil && p.Value != nil {
 				s.References = p.Value.([]string)
 			}
 
-			f := cmd.Handler.(func(context.Context, ImageTagArgs) error)
+			f := cmd.Handler.(func(context.Context, image.TagArgs) error)
 			err := errors.Join(f(ctx, s), cmd.Cleanup())
 			if err != nil {
 				return cmds, err
@@ -753,7 +777,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			ctx = context.WithValue(ctx, cli.Parent{}, "/image/tag")
 			ctx = context.WithValue(ctx, cli.Args("/image/tag"), s)
 		case "/image/rm":
-			s := ImageRmArgs{}
+			s := image.RmArgs{}
 
 			if p := cmd.Get("force"); p != nil && p.Value != nil {
 				s.Force = p.Value.(bool)
@@ -767,7 +791,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				s.Images = p.Value.([]string)
 			}
 
-			f := cmd.Handler.(func(context.Context, ImageRmArgs) error)
+			f := cmd.Handler.(func(context.Context, image.RmArgs) error)
 			err := errors.Join(f(ctx, s), cmd.Cleanup())
 			if err != nil {
 				return cmds, err
@@ -779,7 +803,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 
 			ctx = context.WithValue(ctx, cli.Parent{}, "/container")
 		case "/container/ls":
-			s := ContainerLsArgs{}
+			s := container.LsArgs{}
 
 			if p := cmd.Get("all"); p != nil && p.Value != nil {
 				s.All = p.Value.(bool)
@@ -805,7 +829,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				s.Size = p.Value.(bool)
 			}
 
-			f := cmd.Handler.(func(context.Context, ContainerLsArgs) error)
+			f := cmd.Handler.(func(context.Context, container.LsArgs) error)
 			err := errors.Join(f(ctx, s), cmd.Cleanup())
 			if err != nil {
 				return cmds, err
@@ -814,7 +838,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			ctx = context.WithValue(ctx, cli.Parent{}, "/container/ls")
 			ctx = context.WithValue(ctx, cli.Args("/container/ls"), s)
 		case "/container/run":
-			s := ContainerRunArgs{}
+			s := container.RunArgs{}
 
 			if p := cmd.Get("detach"); p != nil && p.Value != nil {
 				s.Detach = p.Value.(bool)
@@ -868,7 +892,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				s.Command = p.Value.([]string)
 			}
 
-			f := cmd.Handler.(func(context.Context, ContainerRunArgs) error)
+			f := cmd.Handler.(func(context.Context, container.RunArgs) error)
 			err := errors.Join(f(ctx, s), cmd.Cleanup())
 			if err != nil {
 				return cmds, err
@@ -877,7 +901,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			ctx = context.WithValue(ctx, cli.Parent{}, "/container/run")
 			ctx = context.WithValue(ctx, cli.Args("/container/run"), s)
 		case "/container/logs":
-			s := ContainerLogsArgs{}
+			s := container.LogsArgs{}
 
 			if p := cmd.Get("follow"); p != nil && p.Value != nil {
 				s.Follow = p.Value.(bool)
@@ -899,7 +923,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				s.Container = p.Value.(string)
 			}
 
-			f := cmd.Handler.(func(context.Context, ContainerLogsArgs) error)
+			f := cmd.Handler.(func(context.Context, container.LogsArgs) error)
 			err := errors.Join(f(ctx, s), cmd.Cleanup())
 			if err != nil {
 				return cmds, err
@@ -908,7 +932,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			ctx = context.WithValue(ctx, cli.Parent{}, "/container/logs")
 			ctx = context.WithValue(ctx, cli.Args("/container/logs"), s)
 		case "/container/rm":
-			s := ContainerRmArgs{}
+			s := container.RmArgs{}
 
 			if p := cmd.Get("force"); p != nil && p.Value != nil {
 				s.Force = p.Value.(bool)
@@ -922,7 +946,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				s.Containers = p.Value.([]string)
 			}
 
-			f := cmd.Handler.(func(context.Context, ContainerRmArgs) error)
+			f := cmd.Handler.(func(context.Context, container.RmArgs) error)
 			err := errors.Join(f(ctx, s), cmd.Cleanup())
 			if err != nil {
 				return cmds, err
@@ -934,7 +958,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 
 			ctx = context.WithValue(ctx, cli.Parent{}, "/network")
 		case "/network/ls":
-			s := NetworkLsArgs{}
+			s := network.LsArgs{}
 
 			if p := cmd.Get("filter"); p != nil && p.Value != nil {
 				s.Filter = p.Value.([]string)
@@ -948,7 +972,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				s.Quiet = p.Value.(bool)
 			}
 
-			f := cmd.Handler.(func(context.Context, NetworkLsArgs) error)
+			f := cmd.Handler.(func(context.Context, network.LsArgs) error)
 			err := errors.Join(f(ctx, s), cmd.Cleanup())
 			if err != nil {
 				return cmds, err
@@ -957,7 +981,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			ctx = context.WithValue(ctx, cli.Parent{}, "/network/ls")
 			ctx = context.WithValue(ctx, cli.Args("/network/ls"), s)
 		case "/network/create":
-			s := NetworkCreateArgs{}
+			s := network.CreateArgs{}
 
 			if p := cmd.Get("driver"); p != nil && p.Value != nil {
 				s.Driver = p.Value.(string)
@@ -987,7 +1011,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				s.Name = p.Value.(string)
 			}
 
-			f := cmd.Handler.(func(context.Context, NetworkCreateArgs) error)
+			f := cmd.Handler.(func(context.Context, network.CreateArgs) error)
 			err := errors.Join(f(ctx, s), cmd.Cleanup())
 			if err != nil {
 				return cmds, err
@@ -996,13 +1020,13 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			ctx = context.WithValue(ctx, cli.Parent{}, "/network/create")
 			ctx = context.WithValue(ctx, cli.Args("/network/create"), s)
 		case "/network/rm":
-			s := NetworkRmArgs{}
+			s := network.RmArgs{}
 
 			if p := cmd.Get("networks"); p != nil && p.Value != nil {
 				s.Networks = p.Value.([]string)
 			}
 
-			f := cmd.Handler.(func(context.Context, NetworkRmArgs) error)
+			f := cmd.Handler.(func(context.Context, network.RmArgs) error)
 			err := errors.Join(f(ctx, s), cmd.Cleanup())
 			if err != nil {
 				return cmds, err
@@ -1014,7 +1038,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 
 			ctx = context.WithValue(ctx, cli.Parent{}, "/volume")
 		case "/volume/ls":
-			s := VolumeLsArgs{}
+			s := volume.LsArgs{}
 
 			if p := cmd.Get("filter"); p != nil && p.Value != nil {
 				s.Filter = p.Value.([]string)
@@ -1028,7 +1052,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				s.Quiet = p.Value.(bool)
 			}
 
-			f := cmd.Handler.(func(context.Context, VolumeLsArgs) error)
+			f := cmd.Handler.(func(context.Context, volume.LsArgs) error)
 			err := errors.Join(f(ctx, s), cmd.Cleanup())
 			if err != nil {
 				return cmds, err
@@ -1037,7 +1061,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			ctx = context.WithValue(ctx, cli.Parent{}, "/volume/ls")
 			ctx = context.WithValue(ctx, cli.Args("/volume/ls"), s)
 		case "/volume/create":
-			s := VolumeCreateArgs{}
+			s := volume.CreateArgs{}
 
 			if p := cmd.Get("driver"); p != nil && p.Value != nil {
 				s.Driver = p.Value.(string)
@@ -1051,7 +1075,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				s.Name = p.Value.(string)
 			}
 
-			f := cmd.Handler.(func(context.Context, VolumeCreateArgs) error)
+			f := cmd.Handler.(func(context.Context, volume.CreateArgs) error)
 			err := errors.Join(f(ctx, s), cmd.Cleanup())
 			if err != nil {
 				return cmds, err
@@ -1060,7 +1084,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			ctx = context.WithValue(ctx, cli.Parent{}, "/volume/create")
 			ctx = context.WithValue(ctx, cli.Args("/volume/create"), s)
 		case "/volume/rm":
-			s := VolumeRmArgs{}
+			s := volume.RmArgs{}
 
 			if p := cmd.Get("force"); p != nil && p.Value != nil {
 				s.Force = p.Value.(bool)
@@ -1070,7 +1094,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				s.Volumes = p.Value.([]string)
 			}
 
-			f := cmd.Handler.(func(context.Context, VolumeRmArgs) error)
+			f := cmd.Handler.(func(context.Context, volume.RmArgs) error)
 			err := errors.Join(f(ctx, s), cmd.Cleanup())
 			if err != nil {
 				return cmds, err

@@ -1,11 +1,11 @@
-package main
+package volume
 
 import (
 	"context"
 	"fmt"
 )
 
-type VolumeLsArgs struct {
+type LsArgs struct {
 	// Provide filter values.
 	//cli:alias=f
 	Filter []string
@@ -19,13 +19,13 @@ type VolumeLsArgs struct {
 }
 
 // RunVolumeLs lists volumes.
-func RunVolumeLs(ctx context.Context, args VolumeLsArgs) error {
+func RunLs(ctx context.Context, args LsArgs) error {
 	fmt.Println("volume ls")
 	fmt.Println(args)
 	return nil
 }
 
-type VolumeCreateArgs struct {
+type CreateArgs struct {
 	// Driver to manage the volume.
 	//cli:default=local
 	Driver string
@@ -40,13 +40,13 @@ type VolumeCreateArgs struct {
 }
 
 // RunVolumeCreate creates a volume.
-func RunVolumeCreate(ctx context.Context, args VolumeCreateArgs) error {
+func RunCreate(ctx context.Context, args CreateArgs) error {
 	fmt.Println("volume create")
 	fmt.Println(args)
 	return nil
 }
 
-type VolumeRmArgs struct {
+type RmArgs struct {
 	// Force removal of the volume.
 	//cli:alias=f
 	Force bool
@@ -58,7 +58,7 @@ type VolumeRmArgs struct {
 }
 
 // RunVolumeRm removes volumes.
-func RunVolumeRm(ctx context.Context, args VolumeRmArgs) error {
+func RunRm(ctx context.Context, args RmArgs) error {
 	fmt.Println("volume rm")
 	fmt.Println(args)
 	return nil

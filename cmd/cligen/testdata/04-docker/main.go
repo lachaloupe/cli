@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"example.com/testcli/container"
+	"example.com/testcli/image"
+	"example.com/testcli/network"
+	"example.com/testcli/volume"
 	"github.com/lachaloupe/cli"
 )
 
@@ -20,19 +24,19 @@ var CLI = cli.Command{
 			Commands: []*cli.Command{
 				{
 					Name:    "ls",
-					Handler: RunImageLs,
+					Handler: image.RunLs,
 				},
 				{
 					Name:    "pull",
-					Handler: RunImagePull,
+					Handler: image.RunPull,
 				},
 				{
 					Name:    "tag",
-					Handler: RunImageTag,
+					Handler: image.RunTag,
 				},
 				{
 					Name:    "rm",
-					Handler: RunImageRm,
+					Handler: image.RunRm,
 				},
 			},
 		},
@@ -42,19 +46,19 @@ var CLI = cli.Command{
 			Commands: []*cli.Command{
 				{
 					Name:    "ls",
-					Handler: RunContainerLs,
+					Handler: container.RunLs,
 				},
 				{
 					Name:    "run",
-					Handler: RunContainerRun,
+					Handler: container.RunRun,
 				},
 				{
 					Name:    "logs",
-					Handler: RunContainerLogs,
+					Handler: container.RunLogs,
 				},
 				{
 					Name:    "rm",
-					Handler: RunContainerRm,
+					Handler: container.RunRm,
 				},
 			},
 		},
@@ -64,15 +68,15 @@ var CLI = cli.Command{
 			Commands: []*cli.Command{
 				{
 					Name:    "ls",
-					Handler: RunNetworkLs,
+					Handler: network.RunLs,
 				},
 				{
 					Name:    "create",
-					Handler: RunNetworkCreate,
+					Handler: network.RunCreate,
 				},
 				{
 					Name:    "rm",
-					Handler: RunNetworkRm,
+					Handler: network.RunRm,
 				},
 			},
 		},
@@ -82,15 +86,15 @@ var CLI = cli.Command{
 			Commands: []*cli.Command{
 				{
 					Name:    "ls",
-					Handler: RunVolumeLs,
+					Handler: volume.RunLs,
 				},
 				{
 					Name:    "create",
-					Handler: RunVolumeCreate,
+					Handler: volume.RunCreate,
 				},
 				{
 					Name:    "rm",
-					Handler: RunVolumeRm,
+					Handler: volume.RunRm,
 				},
 			},
 		},

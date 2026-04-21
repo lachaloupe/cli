@@ -1,4 +1,4 @@
-package main
+package container
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-type ContainerLsArgs struct {
+type LsArgs struct {
 	// Show all containers.
 	//cli:alias=a
 	All bool
@@ -31,13 +31,13 @@ type ContainerLsArgs struct {
 }
 
 // RunContainerLs lists containers.
-func RunContainerLs(ctx context.Context, args ContainerLsArgs) error {
+func RunLs(ctx context.Context, args LsArgs) error {
 	fmt.Println("container ls")
 	fmt.Println(args)
 	return nil
 }
 
-type ContainerRunArgs struct {
+type RunArgs struct {
 	// Run container in background and print container ID.
 	//cli:alias=d
 	Detach bool
@@ -96,7 +96,7 @@ type ContainerRunArgs struct {
 }
 
 // RunContainerRun runs a command in a new container.
-func RunContainerRun(ctx context.Context, args ContainerRunArgs) error {
+func RunRun(ctx context.Context, args RunArgs) error {
 	fmt.Printf(
 		"container-run detach=%t env=%s env-file=%s interactive=%t name=%s publish=%s rm=%t pull=%s tty=%t volume=%s workdir=%s image=%s command=%s\n",
 		args.Detach,
@@ -116,7 +116,7 @@ func RunContainerRun(ctx context.Context, args ContainerRunArgs) error {
 	return nil
 }
 
-type ContainerLogsArgs struct {
+type LogsArgs struct {
 	// Follow log output.
 	//cli:alias=f
 	Follow bool
@@ -139,13 +139,13 @@ type ContainerLogsArgs struct {
 }
 
 // RunContainerLogs fetches container logs.
-func RunContainerLogs(ctx context.Context, args ContainerLogsArgs) error {
+func RunLogs(ctx context.Context, args LogsArgs) error {
 	fmt.Println("container logs")
 	fmt.Println(args)
 	return nil
 }
 
-type ContainerRmArgs struct {
+type RmArgs struct {
 	// Force removal of a running container.
 	//cli:alias=f
 	Force bool
@@ -161,7 +161,7 @@ type ContainerRmArgs struct {
 }
 
 // RunContainerRm removes containers.
-func RunContainerRm(ctx context.Context, args ContainerRmArgs) error {
+func RunRm(ctx context.Context, args RmArgs) error {
 	fmt.Println("container rm")
 	fmt.Println(args)
 	return nil

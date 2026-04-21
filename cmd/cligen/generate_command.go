@@ -51,7 +51,6 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) {
 			fmt.Fprintln(w, "{")
 			fmt.Fprintf(w, "Name:%q,\n", arg.Flag)
 			fmt.Fprintf(w, "Type:%q,\n", arg.Type)
-
 			if len(arg.Aliases) != 0 {
 				fmt.Fprintf(w, "Aliases:%#v,\n", arg.Aliases)
 			}
@@ -81,11 +80,9 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) {
 				fmt.Fprintf(w, "Default: %q,\n", arg.Defaults[0])
 			default:
 				fmt.Fprintln(w, "Defaults: []string{")
-
 				for _, s := range arg.Defaults {
 					fmt.Fprintf(w, "%q,\n", s)
 				}
-
 				fmt.Fprintln(w, "},")
 			}
 
@@ -94,6 +91,7 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) {
 				for key := range arg.Labels {
 					keys = append(keys, key)
 				}
+
 				slices.Sort(keys)
 
 				fmt.Fprintln(w, "Labels: map[string][]string{")
@@ -127,8 +125,20 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) {
 				}
 			}
 
+			validates := arg.Validates
 			if arg.Validate != "" {
-				fmt.Fprintf(w, "Validate: %s,\n", arg.Validate)
+				validates = append(validates, arg.Validate)
+			}
+
+			if len(validates) != 0 {
+				fmt.Fprintf(w, "Validate: func(arg *cli.Arg, s string) error {\n")
+				for _, validate := range validates {
+					fmt.Fprintf(w, "if err := %s(arg, s); err != nil {\n", validate)
+					fmt.Fprintln(w, "return err")
+					fmt.Fprintln(w, "}")
+				}
+				fmt.Fprintln(w, "return nil")
+				fmt.Fprintln(w, "},")
 			}
 
 			if arg.Required {

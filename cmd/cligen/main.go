@@ -38,9 +38,10 @@ type Args struct {
 }
 
 type Generator struct {
-	Cmds      []*Command
-	Imports   map[string]struct{}
-	Providers map[string]struct{}
+	Cmds          []*Command
+	Imports       map[string]string
+	SourceImports map[string]string
+	Providers     map[string]struct{}
 }
 
 type Command struct {
@@ -73,6 +74,7 @@ type Arg struct {
 	Directives []string
 	LookupEnum bool
 	Validate   string
+	Validates  []string
 	Required   bool
 	Positional int
 }
@@ -102,12 +104,13 @@ func Parse(filename string, providers []string) (*Generator, error) {
 	}
 
 	gen := &Generator{
-		Imports: map[string]struct{}{
-			"context":                   {},
-			"errors":                    {},
-			"github.com/lachaloupe/cli": {},
+		Imports: map[string]string{
+			"context":                   "",
+			"errors":                    "",
+			"github.com/lachaloupe/cli": "",
 		},
-		Providers: map[string]struct{}{},
+		SourceImports: map[string]string{},
+		Providers:     map[string]struct{}{},
 	}
 
 	for _, provider := range providers {
@@ -121,15 +124,15 @@ func Parse(filename string, providers []string) (*Generator, error) {
 	}
 
 	if _, ok := gen.Providers["aws"]; ok {
-		gen.Imports["fmt"] = struct{}{}
-		gen.Imports["io"] = struct{}{}
-		gen.Imports["net/url"] = struct{}{}
-		gen.Imports["strings"] = struct{}{}
-		gen.Imports["github.com/aws/aws-sdk-go-v2/aws"] = struct{}{}
-		gen.Imports["github.com/aws/aws-sdk-go-v2/config"] = struct{}{}
-		gen.Imports["github.com/aws/aws-sdk-go-v2/service/s3"] = struct{}{}
-		gen.Imports["github.com/aws/aws-sdk-go-v2/service/secretsmanager"] = struct{}{}
-		gen.Imports["github.com/aws/aws-sdk-go-v2/service/ssm"] = struct{}{}
+		gen.Imports["fmt"] = ""
+		gen.Imports["io"] = ""
+		gen.Imports["net/url"] = ""
+		gen.Imports["strings"] = ""
+		gen.Imports["github.com/aws/aws-sdk-go-v2/aws"] = ""
+		gen.Imports["github.com/aws/aws-sdk-go-v2/config"] = ""
+		gen.Imports["github.com/aws/aws-sdk-go-v2/service/s3"] = ""
+		gen.Imports["github.com/aws/aws-sdk-go-v2/service/secretsmanager"] = ""
+		gen.Imports["github.com/aws/aws-sdk-go-v2/service/ssm"] = ""
 	}
 
 	for i, file := range pkgs[0].GoFiles {
@@ -138,44 +141,40 @@ func Parse(filename string, providers []string) (*Generator, error) {
 		}
 
 		file := pkgs[0].Syntax[i]
+		gen.SourceImports = importsNames(file)
 
 		for _, decl := range file.Decls {
 			if g, ok := decl.(*ast.GenDecl); ok && g.Tok == token.VAR {
 				for _, s := range g.Specs {
-					vs, ok := s.(*ast.ValueSpec)
-					if !ok {
-						continue
-					}
+					if vs, ok := s.(*ast.ValueSpec); ok {
+						for i, v := range vs.Values {
+							if lit, ok := v.(*ast.CompositeLit); ok {
+								if sel, ok := lit.Type.(*ast.SelectorExpr); ok {
+									if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == "cli" && sel.Sel.Name == "Command" {
+										cmd := &Command{
+											ID:   vs.Names[i].Name,
+											Path: "/",
+										}
 
-					for i, v := range vs.Values {
-						lit, ok := v.(*ast.CompositeLit)
-						if ok {
-							sel, ok := lit.Type.(*ast.SelectorExpr)
-							if ok {
-								pkg, ok := sel.X.(*ast.Ident)
-								if ok && pkg.Name == "cli" && sel.Sel.Name == "Command" {
-									cmd := &Command{
-										ID:   vs.Names[i].Name,
-										Path: "/",
+										if err := gen.parseCommand(cmd, lit); err != nil {
+											return nil, err
+										}
+
+										if err := gen.parseFunctions(pkgs, cmd); err != nil {
+											return nil, err
+										}
+
+										if err := gen.parseStructs(pkgs, cmd); err != nil {
+											return nil, err
+										}
+
+										if err := cmd.Process(); err != nil {
+											return nil, err
+										}
+
+										gen.Cmds = append(gen.Cmds, cmd)
+										break
 									}
-
-									if err := gen.parseCommand(cmd, lit); err != nil {
-										return nil, err
-									}
-
-									if err := gen.parseFunctions(pkgs, cmd); err != nil {
-										return nil, err
-									}
-
-									if err := gen.parseStructs(pkgs, cmd); err != nil {
-										return nil, err
-									}
-
-									if err := gen.add(cmd); err != nil {
-										return nil, err
-									}
-
-									break
 								}
 							}
 						}
@@ -194,14 +193,6 @@ func Parse(filename string, providers []string) (*Generator, error) {
 
 func (arg *Arg) HasLabel(kind, value string) bool {
 	return slices.Contains(arg.Labels[kind], value)
-}
-
-func (arg *Arg) AddLabel(kind, value string) {
-	if arg.Labels == nil {
-		arg.Labels = make(map[string][]string)
-	}
-
-	arg.Labels[kind] = append(arg.Labels[kind], value)
 }
 
 func (arg *Arg) Native() bool {
@@ -349,19 +340,12 @@ func (c *Command) Process() error {
 			}
 		}
 
-		hasPath := len(arg.Labels["path"]) != 0
-		switch {
-		case hasPath && (arg.LookupEnum || len(arg.Choices) != 0):
-			arg.Validate = `func(arg *cli.Arg, s string) error {
-				if err := cli.PathValidate(arg, s); err != nil {
-					return err
-				}
-				return cli.EnumValidate(arg, s)
-			}`
-		case hasPath:
-			arg.Validate = "cli.PathValidate"
-		case arg.LookupEnum || len(arg.Choices) != 0:
-			arg.Validate = "cli.EnumValidate"
+		if len(arg.Labels["path"]) != 0 {
+			arg.Validates = append(arg.Validates, "cli.PathValidate")
+		}
+
+		if arg.LookupEnum || len(arg.Choices) != 0 {
+			arg.Validates = append(arg.Validates, "cli.EnumValidate")
 		}
 	}
 
@@ -495,7 +479,11 @@ func applyPathDirective(cmd *Command, arg *Arg, value string) error {
 		}
 	}
 
-	arg.AddLabel("path", value)
+	if arg.Labels == nil {
+		arg.Labels = make(map[string][]string)
+	}
+
+	arg.Labels["path"] = append(arg.Labels["path"], value)
 	return nil
 }
 

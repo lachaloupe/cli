@@ -7,15 +7,16 @@
 Generate command-line interfaces from Go code.
 
 `cligen` reads a `cli.Command`, infers the CLI surface from your handler signature, and writes the generated glue into `*.cli.go`.
+Handlers and subcommands can live in the same package as the root command or in imported packages.
 
 ## Install
 
 ```bash
 # runtime dependency used by the generated CLI
-go get github.com/lachaloupe/cli@v0.1.0
+go get github.com/lachaloupe/cli@v0.1.1
 
 # tool-only dependency used by go generate
-go get -tool github.com/lachaloupe/cli/cmd/cligen@v0.1.0
+go get -tool github.com/lachaloupe/cli/cmd/cligen@v0.1.1
 ```
 
 ## Quick start
@@ -65,7 +66,28 @@ See [01-minimal](./cmd/cligen/testdata/01-minimal).
 
 ## How it works
 
-Start with a `cli.Command` and a handler. If the handler takes an argument struct, `cligen` inspects that struct and turns its fields into flags or positional arguments. Comments become help text. Then `CLI.Main()` runs the generated parser and calls your handler.
+Start with a `cli.Command` and a handler.
+If the handler takes an argument struct, `cligen` inspects that struct and turns its fields into flags or positional arguments.
+Comments become help text.
+Then `CLI.Main()` runs the generated parser and calls your handler.
+
+The generator resolves handler symbols across imported packages too, which makes it easy to split larger CLIs into modules without giving up generated parsing.
+
+```go
+import (
+	"example.com/myapp/image"
+	"github.com/lachaloupe/cli"
+)
+
+var CLI = cli.Command{
+	Commands: []*cli.Command{
+		{
+			Name:    "image",
+			Handler: image.RunLs,
+		},
+	},
+}
+```
 
 ## From Go fields to CLI UX
 
@@ -187,7 +209,8 @@ See [06-git](./cmd/cligen/testdata/06-git).
 
 ## Native type parsing
 
-Built-in scalar types are parsed automatically, and so are slices of those types. `encoding.TextUnmarshaler` types are supported too, which makes common standard-library types work out of the box.
+Built-in scalar types are parsed automatically, and so are slices of those types.
+Type supporting the `encoding.TextUnmarshaler` interface are supported too, which makes common standard-library types work out of the box.
 
 Examples include:
 
@@ -233,7 +256,8 @@ Common forms are supported:
 
 ## Commands and handler shapes
 
-Commands are declared as a tree. A handler may take only `context.Context`, or `context.Context` plus an args struct.
+Commands are declared as a tree.
+A handler may take only `context.Context`, or `context.Context` plus an args struct.
 
 ```go
 var CLI = cli.Command{
@@ -264,9 +288,15 @@ Parent command flags stay available under subcommands, which lets you define glo
 
 See [03-commands](./cmd/cligen/testdata/03-commands).
 
+Command trees can be split across packages too.
+For example, a root command in `main` can wire subcommands to handlers such as `image.RunLs` or `container.RunRm`, and `cligen` will load the arg structs from those imported packages.
+
+See [04-docker](./cmd/cligen/testdata/04-docker).
+
 ## Context values
 
-Handlers always receive a `context.Context`. The generated code uses it for two things:
+Handlers always receive a `context.Context`.
+The generated code uses it for two things:
 
 - `cli.Parent{}` stores the current command path
 - `cli.Args(path)` stores the parsed args for a command path
@@ -278,7 +308,8 @@ rootArgs := ctx.Value(cli.Args("/")).(RootArgs)
 loginArgs := ctx.Value(cli.Args("/login")).(LoginArgs)
 ```
 
-Any command path works here, not just `/`. Use the path for the command whose parsed args you want to access.
+Any command path works here, not just `/`.
+Use the path for the command whose parsed args you want to access.
 
 See [03-commands](./cmd/cligen/testdata/03-commands).
 
@@ -286,7 +317,9 @@ See [03-commands](./cmd/cligen/testdata/03-commands).
 
 Defaults live next to the field.
 
-You can provide more than one `//cli:default=...` directive. They are evaluated in order, and the first one that expands to a non-empty value is used. This is mainly useful for environment-based fallbacks.
+You can provide more than one `//cli:default=...` directive.
+They are evaluated in order, and the first one that expands to a non-empty value is used.
+This is mainly useful for environment-based fallbacks.
 
 For example:
 
@@ -296,7 +329,9 @@ For example:
 DataDir string
 ```
 
-If `XDG_DATA_HOME` is set and not empty, it wins. Otherwise `HOME` is tried next. If neither expands to a non-empty value, no default is applied.
+If `XDG_DATA_HOME` is set and not empty, it wins.
+Otherwise `HOME` is tried next.
+If neither expands to a non-empty value, no default is applied.
 
 Slice defaults use CSV syntax:
 
@@ -322,7 +357,8 @@ See [09-percentile](./cmd/cligen/testdata/09-percentile).
 
 ## Value resolution
 
-Before parsing, raw values can be resolved. By default:
+Before parsing, raw values can be resolved.
+By default:
 
 - `@path` reads from a file
 - `//cli:default=$NAME` expands an environment variable
@@ -349,7 +385,8 @@ See [06-git](./cmd/cligen/testdata/06-git).
 
 ## `io.Reader` inputs
 
-`io.Reader` is a native argument type. Values can point to:
+`io.Reader` is a native argument type.
+Values can point to:
 
 - a local file
 - `-` for stdin
@@ -415,11 +452,14 @@ In [08-head](./cmd/cligen/testdata/08-head), this makes standard input the defau
 
 ### `Lookup`
 
-`Lookup` rewrites raw string values before built-in parsing runs. In practice, this is a string value provider hook.
+`Lookup` rewrites raw string values before built-in parsing runs.
+In practice, this is a string value provider hook.
 
-The built-in resolver already handles `@path` file reads. `Lookup` exists for cases where the raw value should come from somewhere else before it is parsed into the target Go type.
+The built-in resolver already handles `@path` file reads.
+`Lookup` exists for cases where the raw value should come from somewhere else before it is parsed into the target Go type.
 
-The main shipped example is the AWS provider. When you generate with `--provider aws`, `cligen` installs a resolver under the hood so values like these are turned into plain strings before parsing:
+The main shipped example is the AWS provider.
+When you generate with `--provider aws`, `cligen` installs a resolver under the hood so values like these are turned into plain strings before parsing:
 
 ```bash
 ./app --db-url @aws:ssm:/my-app/db-url
@@ -430,7 +470,8 @@ See [11-aws](./cmd/cligen/testdata/11-aws).
 
 ### `Open`
 
-`Open` rewrites raw values for `io.Reader` fields before built-in reader handling runs. In practice, this is a reader provider hook.
+`Open` rewrites raw values for `io.Reader` fields before built-in reader handling runs.
+In practice, this is a reader provider hook.
 
 By default, `io.Reader` already understands:
 
@@ -442,7 +483,8 @@ By default, `io.Reader` already understands:
 
 `Open` exists for cases where a value should produce a reader through another transport or container format first, such as S3 objects, compressed inputs, or archive entries.
 
-The main shipped example is again the AWS provider. When generated with `--provider aws`, `cligen` installs a reader resolver so this works:
+The main shipped example is again the AWS provider.
+When generated with `--provider aws`, `cligen` installs a reader resolver so this works:
 
 ```bash
 ./app s3://my-bucket/object.txt
@@ -452,7 +494,8 @@ See [11-aws](./cmd/cligen/testdata/11-aws).
 
 ### `Arg.Parse`
 
-`Arg.Parse` is a lower-level runtime hook for manual `cli.Command` definitions. Use it when a value should parse into a custom type or syntax that the built-in parser does not know about.
+`Arg.Parse` is a lower-level runtime hook for manual `cli.Command` definitions.
+Use it when a value should parse into a custom type or syntax that the built-in parser does not know about.
 
 For example, to parse a date in `YYYY-MM-DD` form:
 
@@ -472,7 +515,8 @@ cmd := cli.Command{
 
 ### `Arg.Validate`
 
-`Arg.Validate` is the matching lower-level validation hook. It runs after parsing and is useful for domain checks that go beyond type conversion.
+`Arg.Validate` is the matching lower-level validation hook.
+It runs after parsing and is useful for domain checks that go beyond type conversion.
 
 For example, to require an AWS ARN shape:
 
@@ -516,13 +560,15 @@ go1.26.2 darwin/arm64
 v1.2.3
 ```
 
-If `cli.Version` is empty, no built-in version command is added. If your CLI already defines its own `version` command, that one is kept.
+If `cli.Version` is empty, no built-in version command is added.
+If your CLI already defines its own `version` command, that one is kept.
 
 See [01-minimal](./cmd/cligen/testdata/01-minimal).
 
 ## Example suite
 
-The examples under [cmd/cligen/testdata](./cmd/cligen/testdata) are also golden tests. Their checked-in `main.cli.go` files must match freshly generated output.
+The examples under [cmd/cligen/testdata](./cmd/cligen/testdata) are also golden tests.
+Their checked-in `main.cli.go` files must match freshly generated output.
 
 | Example | What it showcases |
 | --- | --- |

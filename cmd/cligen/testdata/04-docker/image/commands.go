@@ -1,11 +1,11 @@
-package main
+package image
 
 import (
 	"context"
 	"fmt"
 )
 
-type ImageLsArgs struct {
+type LsArgs struct {
 	// Show all images.
 	//cli:alias=a
 	All bool
@@ -29,13 +29,13 @@ type ImageLsArgs struct {
 }
 
 // RunImageLs lists images.
-func RunImageLs(ctx context.Context, args ImageLsArgs) error {
+func RunLs(ctx context.Context, args LsArgs) error {
 	fmt.Println("image ls")
 	fmt.Println(args)
 	return nil
 }
 
-type ImagePullArgs struct {
+type PullArgs struct {
 	// Download all tagged images in the repository.
 	//cli:alias=a
 	AllTags bool
@@ -54,25 +54,25 @@ type ImagePullArgs struct {
 }
 
 // RunImagePull pulls an image.
-func RunImagePull(ctx context.Context, args ImagePullArgs) error {
+func RunPull(ctx context.Context, args PullArgs) error {
 	fmt.Println("image pull")
 	fmt.Println(args)
 	return nil
 }
 
-type ImageTagArgs struct {
+type TagArgs struct {
 	// Source and target image references.
 	//cli:arg=2
 	References []string
 }
 
 // RunImageTag tags an image into a repository.
-func RunImageTag(ctx context.Context, args ImageTagArgs) error {
+func RunTag(ctx context.Context, args TagArgs) error {
 	fmt.Printf("image tag source=%s target=%s\n", args.References[0], args.References[1])
 	return nil
 }
 
-type ImageRmArgs struct {
+type RmArgs struct {
 	// Force removal of the image.
 	//cli:alias=f
 	Force bool
@@ -87,7 +87,7 @@ type ImageRmArgs struct {
 }
 
 // RunImageRm removes images.
-func RunImageRm(ctx context.Context, args ImageRmArgs) error {
+func RunRm(ctx context.Context, args RmArgs) error {
 	fmt.Println("image rm")
 	fmt.Println(args)
 	return nil

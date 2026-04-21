@@ -17,8 +17,13 @@ func (gen *Generator) Generate(filename string) error {
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "import (")
 
-	for i := range gen.Imports {
-		fmt.Fprintf(w, "%q\n", i)
+	for path, alias := range gen.Imports {
+		if alias != "" {
+			fmt.Fprintf(w, "%s %q\n", alias, path)
+			continue
+		}
+
+		fmt.Fprintf(w, "%q\n", path)
 	}
 
 	fmt.Fprintln(w, ")")
