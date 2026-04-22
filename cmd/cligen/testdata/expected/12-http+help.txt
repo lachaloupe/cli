@@ -1,0 +1,5 @@
+Usage: 
+
+Subcommands:
+  serve            Run the HTTP server
+  version          Show version information.

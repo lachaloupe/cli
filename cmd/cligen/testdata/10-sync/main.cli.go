@@ -15,9 +15,64 @@ func init() {
 
 func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	root := cli.Command{
-		Path:    "/",
-		Handler: RunSync,
-		Help:    "Synchronize a working tree into a release directory",
+		Path: "/",
+		Help: "Synchronize a working tree into a release directory",
+		Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+			s := Args{}
+
+			if p := cmd.Get("worktree"); p != nil && p.Value != nil {
+				s.Worktree = p.Value.(string)
+			}
+
+			if p := cmd.Get("workers"); p != nil && p.Value != nil {
+				s.Workers = p.Value.(int)
+			}
+
+			if p := cmd.Get("retries"); p != nil && p.Value != nil {
+				s.Retries = p.Value.(uint8)
+			}
+
+			if p := cmd.Get("priority"); p != nil && p.Value != nil {
+				s.Priority = p.Value.(int8)
+			}
+
+			if p := cmd.Get("scratch"); p != nil && p.Value != nil {
+				s.Scratch = p.Value.(string)
+			}
+
+			if p := cmd.Get("state"); p != nil && p.Value != nil {
+				s.State = p.Value.(string)
+			}
+
+			if p := cmd.Get("helper"); p != nil && p.Value != nil {
+				s.Helper = p.Value.(string)
+			}
+
+			if p := cmd.Get("lock"); p != nil && p.Value != nil {
+				s.Lock = p.Value.(string)
+			}
+
+			if p := cmd.Get("current"); p != nil && p.Value != nil {
+				s.Current = p.Value.(string)
+			}
+
+			if p := cmd.Get("sources"); p != nil && p.Value != nil {
+				s.Sources = p.Value.([]string)
+			}
+
+			if p := cmd.Get("destination"); p != nil && p.Value != nil {
+				s.Destination = p.Value.(string)
+			}
+
+			err := errors.Join((RunSync)(ctx, s), cmd.Cleanup())
+			if err != nil {
+				return ctx, err
+			}
+
+			ctx = context.WithValue(ctx, cli.Parent{}, "/")
+			ctx = context.WithValue(ctx, cli.Args("/"), s)
+			return ctx, nil
+		},
 		Args: []*cli.Arg{
 			{
 				Name: "worktree",
@@ -157,68 +212,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	}
 
 	for _, cmd := range cmds {
-		switch cmd.Path {
-		case "/version":
-			f := cmd.Handler.(func(context.Context) error)
-			err := errors.Join(f(ctx), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-		case "/":
-			s := Args{}
-
-			if p := cmd.Get("worktree"); p != nil && p.Value != nil {
-				s.Worktree = p.Value.(string)
-			}
-
-			if p := cmd.Get("workers"); p != nil && p.Value != nil {
-				s.Workers = p.Value.(int)
-			}
-
-			if p := cmd.Get("retries"); p != nil && p.Value != nil {
-				s.Retries = p.Value.(uint8)
-			}
-
-			if p := cmd.Get("priority"); p != nil && p.Value != nil {
-				s.Priority = p.Value.(int8)
-			}
-
-			if p := cmd.Get("scratch"); p != nil && p.Value != nil {
-				s.Scratch = p.Value.(string)
-			}
-
-			if p := cmd.Get("state"); p != nil && p.Value != nil {
-				s.State = p.Value.(string)
-			}
-
-			if p := cmd.Get("helper"); p != nil && p.Value != nil {
-				s.Helper = p.Value.(string)
-			}
-
-			if p := cmd.Get("lock"); p != nil && p.Value != nil {
-				s.Lock = p.Value.(string)
-			}
-
-			if p := cmd.Get("current"); p != nil && p.Value != nil {
-				s.Current = p.Value.(string)
-			}
-
-			if p := cmd.Get("sources"); p != nil && p.Value != nil {
-				s.Sources = p.Value.([]string)
-			}
-
-			if p := cmd.Get("destination"); p != nil && p.Value != nil {
-				s.Destination = p.Value.(string)
-			}
-
-			f := cmd.Handler.(func(context.Context, Args) error)
-			err := errors.Join(f(ctx, s), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-
-			ctx = context.WithValue(ctx, cli.Parent{}, "/")
-			ctx = context.WithValue(ctx, cli.Args("/"), s)
+		if cmd.Invoke == nil {
+			continue
+		}
+		ctx, err = cmd.Invoke(ctx, cmd)
+		if err != nil {
+			return cmds, err
 		}
 	}
 

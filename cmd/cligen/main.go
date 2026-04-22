@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"path/filepath"
+	"go/types"
 	"slices"
 	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/lachaloupe/cli"
-	"golang.org/x/tools/go/packages"
 )
 
 //go:generate go run . -source main.go -output main.cli.go
@@ -38,27 +37,35 @@ type Args struct {
 }
 
 type Generator struct {
+	Fset          *token.FileSet
 	Cmds          []*Command
 	Imports       map[string]string
+	PackagePath   string
 	SourceImports map[string]string
+	TypesInfo     *types.Info
 	Providers     map[string]struct{}
 }
 
 type Command struct {
-	ID         string
-	Path       string
-	Name       string
-	Aliases    []string
-	Help       string
-	Doc        string
-	Directives []string
-	Handler    string
-	New        string
-	Lookup     string
-	Open       string
-	Struct     string
-	Args       []*Arg
-	Commands   []*Command
+	ID           string
+	Path         string
+	Name         string
+	Aliases      []string
+	Help         string
+	Template     string
+	Doc          string
+	Directives   []string
+	RendererExpr ast.Expr
+	HandlerExpr  ast.Expr
+	HandlerRef   string
+	NewExpr      ast.Expr
+	LookupExpr   ast.Expr
+	OpenExpr     ast.Expr
+	Struct       string
+	StructName   string
+	StructPath   string
+	Args         []*Arg
+	Commands     []*Command
 }
 
 type Arg struct {
@@ -77,118 +84,6 @@ type Arg struct {
 	Validates  []string
 	Required   bool
 	Positional int
-}
-
-func Parse(filename string, providers []string) (*Generator, error) {
-	filename, err := filepath.Abs(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	cfg := &packages.Config{
-		Mode: packages.NeedSyntax | packages.NeedName | packages.NeedFiles,
-		Dir:  filepath.Dir(filename),
-	}
-
-	pkgs, err := packages.Load(cfg, ".")
-	if err != nil {
-		return nil, err
-	}
-
-	if len(pkgs) == 0 {
-		return nil, fmt.Errorf("no package found in %s", filepath.Dir(filename))
-	}
-
-	if len(pkgs[0].Errors) > 0 {
-		return nil, pkgs[0].Errors[0]
-	}
-
-	gen := &Generator{
-		Imports: map[string]string{
-			"context":                   "",
-			"errors":                    "",
-			"github.com/lachaloupe/cli": "",
-		},
-		SourceImports: map[string]string{},
-		Providers:     map[string]struct{}{},
-	}
-
-	for _, provider := range providers {
-		switch provider {
-		case "aws":
-		default:
-			return nil, fmt.Errorf("unsupported provider %q", provider)
-		}
-
-		gen.Providers[provider] = struct{}{}
-	}
-
-	if _, ok := gen.Providers["aws"]; ok {
-		gen.Imports["fmt"] = ""
-		gen.Imports["io"] = ""
-		gen.Imports["net/url"] = ""
-		gen.Imports["strings"] = ""
-		gen.Imports["github.com/aws/aws-sdk-go-v2/aws"] = ""
-		gen.Imports["github.com/aws/aws-sdk-go-v2/config"] = ""
-		gen.Imports["github.com/aws/aws-sdk-go-v2/service/s3"] = ""
-		gen.Imports["github.com/aws/aws-sdk-go-v2/service/secretsmanager"] = ""
-		gen.Imports["github.com/aws/aws-sdk-go-v2/service/ssm"] = ""
-	}
-
-	for i, file := range pkgs[0].GoFiles {
-		if f, err := filepath.Abs(file); err != nil || f != filename {
-			continue
-		}
-
-		file := pkgs[0].Syntax[i]
-		gen.SourceImports = importsNames(file)
-
-		for _, decl := range file.Decls {
-			if g, ok := decl.(*ast.GenDecl); ok && g.Tok == token.VAR {
-				for _, s := range g.Specs {
-					if vs, ok := s.(*ast.ValueSpec); ok {
-						for i, v := range vs.Values {
-							if lit, ok := v.(*ast.CompositeLit); ok {
-								if sel, ok := lit.Type.(*ast.SelectorExpr); ok {
-									if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == "cli" && sel.Sel.Name == "Command" {
-										cmd := &Command{
-											ID:   vs.Names[i].Name,
-											Path: "/",
-										}
-
-										if err := gen.parseCommand(cmd, lit); err != nil {
-											return nil, err
-										}
-
-										if err := gen.parseFunctions(pkgs, cmd); err != nil {
-											return nil, err
-										}
-
-										if err := gen.parseStructs(pkgs, cmd); err != nil {
-											return nil, err
-										}
-
-										if err := cmd.Process(); err != nil {
-											return nil, err
-										}
-
-										gen.Cmds = append(gen.Cmds, cmd)
-										break
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if len(gen.Cmds) == 0 {
-		return nil, fmt.Errorf("no cli.Command variable found in %s", filename)
-	}
-
-	return gen, nil
 }
 
 func (arg *Arg) HasLabel(kind, value string) bool {
@@ -297,7 +192,7 @@ func (c *Command) Process() error {
 			if count, ok := strings.CutPrefix(d, "arg="); ok {
 				n, err := strconv.Atoi(count)
 				if err != nil {
-					return nil
+					return fmt.Errorf("%s: invalid arg count %q for %q", c.Path, count, arg.Name)
 				}
 
 				arg.Positional = n
@@ -394,7 +289,7 @@ func (c *Command) Process() error {
 				}
 
 				if other, ok := names[name]; ok {
-					return fmt.Errorf("%s: duplicate command alias %q for %s and %s", c.Path, name, other, c.Name)
+					return fmt.Errorf("%s: duplicate command alias %q for %s and %s", c.Path, name, other, cmd.Name)
 				}
 
 				names[name] = cmd.Name
@@ -499,7 +394,7 @@ func Run(ctx context.Context, args Args) error {
 
 	output := args.Output
 	if output == "" {
-		if u := strings.TrimSuffix(gofile, ".go"); u != gofile {
+		if u, ok := strings.CutSuffix(gofile, ".go"); ok {
 			output = u + ".cli.go"
 		}
 	}

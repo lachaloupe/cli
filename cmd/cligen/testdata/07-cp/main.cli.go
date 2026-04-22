@@ -15,9 +15,48 @@ func init() {
 
 func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	root := cli.Command{
-		Path:    "/",
-		Handler: RunCopy,
-		Help:    "Copy files and directories",
+		Path: "/",
+		Help: "Copy files and directories",
+		Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+			s := Args{}
+
+			if p := cmd.Get("archive"); p != nil && p.Value != nil {
+				s.Archive = p.Value.(bool)
+			}
+
+			if p := cmd.Get("force"); p != nil && p.Value != nil {
+				s.Force = p.Value.(bool)
+			}
+
+			if p := cmd.Get("interactive"); p != nil && p.Value != nil {
+				s.Interactive = p.Value.(bool)
+			}
+
+			if p := cmd.Get("recursive"); p != nil && p.Value != nil {
+				s.Recursive = p.Value.(bool)
+			}
+
+			if p := cmd.Get("manifest"); p != nil && p.Value != nil {
+				s.Manifest = p.Value.(string)
+			}
+
+			if p := cmd.Get("sources"); p != nil && p.Value != nil {
+				s.Sources = p.Value.([]string)
+			}
+
+			if p := cmd.Get("destination"); p != nil && p.Value != nil {
+				s.Destination = p.Value.(string)
+			}
+
+			err := errors.Join((RunCopy)(ctx, s), cmd.Cleanup())
+			if err != nil {
+				return ctx, err
+			}
+
+			ctx = context.WithValue(ctx, cli.Parent{}, "/")
+			ctx = context.WithValue(ctx, cli.Args("/"), s)
+			return ctx, nil
+		},
 		Args: []*cli.Arg{
 			{
 				Name:    "archive",
@@ -108,52 +147,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	}
 
 	for _, cmd := range cmds {
-		switch cmd.Path {
-		case "/version":
-			f := cmd.Handler.(func(context.Context) error)
-			err := errors.Join(f(ctx), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-		case "/":
-			s := Args{}
-
-			if p := cmd.Get("archive"); p != nil && p.Value != nil {
-				s.Archive = p.Value.(bool)
-			}
-
-			if p := cmd.Get("force"); p != nil && p.Value != nil {
-				s.Force = p.Value.(bool)
-			}
-
-			if p := cmd.Get("interactive"); p != nil && p.Value != nil {
-				s.Interactive = p.Value.(bool)
-			}
-
-			if p := cmd.Get("recursive"); p != nil && p.Value != nil {
-				s.Recursive = p.Value.(bool)
-			}
-
-			if p := cmd.Get("manifest"); p != nil && p.Value != nil {
-				s.Manifest = p.Value.(string)
-			}
-
-			if p := cmd.Get("sources"); p != nil && p.Value != nil {
-				s.Sources = p.Value.([]string)
-			}
-
-			if p := cmd.Get("destination"); p != nil && p.Value != nil {
-				s.Destination = p.Value.(string)
-			}
-
-			f := cmd.Handler.(func(context.Context, Args) error)
-			err := errors.Join(f(ctx, s), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-
-			ctx = context.WithValue(ctx, cli.Parent{}, "/")
-			ctx = context.WithValue(ctx, cli.Args("/"), s)
+		if cmd.Invoke == nil {
+			continue
+		}
+		ctx, err = cmd.Invoke(ctx, cmd)
+		if err != nil {
+			return cmds, err
 		}
 	}
 

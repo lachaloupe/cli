@@ -17,9 +17,64 @@ func init() {
 
 func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	root := cli.Command{
-		Path:    "/",
-		Handler: RunCurl,
-		Help:    "Transfer data from or to a server",
+		Path: "/",
+		Help: "Transfer data from or to a server",
+		Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+			s := Args{}
+
+			if p := cmd.Get("method"); p != nil && p.Value != nil {
+				s.Method = p.Value.(string)
+			}
+
+			if p := cmd.Get("header"); p != nil && p.Value != nil {
+				s.Header = p.Value.([]string)
+			}
+
+			if p := cmd.Get("data"); p != nil && p.Value != nil {
+				s.Data = p.Value.(string)
+			}
+
+			if p := cmd.Get("location"); p != nil && p.Value != nil {
+				s.Location = p.Value.(bool)
+			}
+
+			if p := cmd.Get("connect-timeout"); p != nil && p.Value != nil {
+				s.ConnectTimeout = p.Value.(time.Duration)
+			}
+
+			if p := cmd.Get("retry"); p != nil && p.Value != nil {
+				s.Retry = p.Value.(uint)
+			}
+
+			if p := cmd.Get("output"); p != nil && p.Value != nil {
+				s.Output = p.Value.(string)
+			}
+
+			if p := cmd.Get("cacert"); p != nil && p.Value != nil {
+				s.Cacert = p.Value.(string)
+			}
+
+			if p := cmd.Get("proxy"); p != nil && p.Value != nil {
+				s.Proxy = p.Value.(url.URL)
+			}
+
+			if p := cmd.Get("user-agent"); p != nil && p.Value != nil {
+				s.UserAgent = p.Value.(string)
+			}
+
+			if p := cmd.Get("url"); p != nil && p.Value != nil {
+				s.URL = p.Value.(url.URL)
+			}
+
+			err := errors.Join((RunCurl)(ctx, s), cmd.Cleanup())
+			if err != nil {
+				return ctx, err
+			}
+
+			ctx = context.WithValue(ctx, cli.Parent{}, "/")
+			ctx = context.WithValue(ctx, cli.Args("/"), s)
+			return ctx, nil
+		},
 		Args: []*cli.Arg{
 			{
 				Name:    "method",
@@ -124,68 +179,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	}
 
 	for _, cmd := range cmds {
-		switch cmd.Path {
-		case "/version":
-			f := cmd.Handler.(func(context.Context) error)
-			err := errors.Join(f(ctx), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-		case "/":
-			s := Args{}
-
-			if p := cmd.Get("method"); p != nil && p.Value != nil {
-				s.Method = p.Value.(string)
-			}
-
-			if p := cmd.Get("header"); p != nil && p.Value != nil {
-				s.Header = p.Value.([]string)
-			}
-
-			if p := cmd.Get("data"); p != nil && p.Value != nil {
-				s.Data = p.Value.(string)
-			}
-
-			if p := cmd.Get("location"); p != nil && p.Value != nil {
-				s.Location = p.Value.(bool)
-			}
-
-			if p := cmd.Get("connect-timeout"); p != nil && p.Value != nil {
-				s.ConnectTimeout = p.Value.(time.Duration)
-			}
-
-			if p := cmd.Get("retry"); p != nil && p.Value != nil {
-				s.Retry = p.Value.(uint)
-			}
-
-			if p := cmd.Get("output"); p != nil && p.Value != nil {
-				s.Output = p.Value.(string)
-			}
-
-			if p := cmd.Get("cacert"); p != nil && p.Value != nil {
-				s.Cacert = p.Value.(string)
-			}
-
-			if p := cmd.Get("proxy"); p != nil && p.Value != nil {
-				s.Proxy = p.Value.(url.URL)
-			}
-
-			if p := cmd.Get("user-agent"); p != nil && p.Value != nil {
-				s.UserAgent = p.Value.(string)
-			}
-
-			if p := cmd.Get("url"); p != nil && p.Value != nil {
-				s.URL = p.Value.(url.URL)
-			}
-
-			f := cmd.Handler.(func(context.Context, Args) error)
-			err := errors.Join(f(ctx, s), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-
-			ctx = context.WithValue(ctx, cli.Parent{}, "/")
-			ctx = context.WithValue(ctx, cli.Args("/"), s)
+		if cmd.Invoke == nil {
+			continue
+		}
+		ctx, err = cmd.Invoke(ctx, cmd)
+		if err != nil {
+			return cmds, err
 		}
 	}
 

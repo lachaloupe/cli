@@ -20,12 +20,60 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	root := cli.Command{
 		Path: "/",
 		Help: "Fast, scalable, distributed revision control system",
+		Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+
+			ctx = context.WithValue(ctx, cli.Parent{}, "/")
+			return ctx, nil
+		},
 		Commands: []*cli.Command{
 			{
-				Name:    "commit",
-				Path:    "/commit",
-				Handler: RunCommit,
-				Help:    "RunCommit creates a new commit.",
+				Name: "commit",
+				Path: "/commit",
+				Help: "RunCommit creates a new commit.",
+				Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+					s := CommitArgs{}
+
+					if p := cmd.Get("all"); p != nil && p.Value != nil {
+						s.All = p.Value.(bool)
+					}
+
+					if p := cmd.Get("amend"); p != nil && p.Value != nil {
+						s.Amend = p.Value.(bool)
+					}
+
+					if p := cmd.Get("cleanup"); p != nil && p.Value != nil {
+						s.Cleanup = p.Value.(CleanupMode)
+					}
+
+					if p := cmd.Get("author"); p != nil && p.Value != nil {
+						s.Author = p.Value.(mail.Address)
+					}
+
+					if p := cmd.Get("message"); p != nil && p.Value != nil {
+						s.Message = p.Value.(string)
+					}
+
+					if p := cmd.Get("signoff"); p != nil && p.Value != nil {
+						s.Signoff = p.Value.(bool)
+					}
+
+					if p := cmd.Get("template"); p != nil && p.Value != nil {
+						s.Template = p.Value.(string)
+					}
+
+					if p := cmd.Get("paths"); p != nil && p.Value != nil {
+						s.Paths = p.Value.([]string)
+					}
+
+					err := errors.Join((RunCommit)(ctx, s), cmd.Cleanup())
+					if err != nil {
+						return ctx, err
+					}
+
+					ctx = context.WithValue(ctx, cli.Parent{}, "/commit")
+					ctx = context.WithValue(ctx, cli.Args("/commit"), s)
+					return ctx, nil
+				},
 				Args: []*cli.Arg{
 					{
 						Name:    "all",
@@ -110,12 +158,40 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Name: "remote",
 				Path: "/remote",
 				Help: "Manage set of tracked repositories",
+				Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+
+					ctx = context.WithValue(ctx, cli.Parent{}, "/remote")
+					return ctx, nil
+				},
 				Commands: []*cli.Command{
 					{
-						Name:    "add",
-						Path:    "/remote/add",
-						Handler: RunRemoteAdd,
-						Help:    "RunRemoteAdd adds a new remote.",
+						Name: "add",
+						Path: "/remote/add",
+						Help: "RunRemoteAdd adds a new remote.",
+						Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+							s := RemoteAddArgs{}
+
+							if p := cmd.Get("fetch"); p != nil && p.Value != nil {
+								s.Fetch = p.Value.(bool)
+							}
+
+							if p := cmd.Get("name"); p != nil && p.Value != nil {
+								s.Name = p.Value.(string)
+							}
+
+							if p := cmd.Get("url"); p != nil && p.Value != nil {
+								s.URL = p.Value.(url.URL)
+							}
+
+							err := errors.Join((RunRemoteAdd)(ctx, s), cmd.Cleanup())
+							if err != nil {
+								return ctx, err
+							}
+
+							ctx = context.WithValue(ctx, cli.Parent{}, "/remote/add")
+							ctx = context.WithValue(ctx, cli.Args("/remote/add"), s)
+							return ctx, nil
+						},
 						Args: []*cli.Arg{
 							{
 								Name:    "fetch",
@@ -152,85 +228,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	}
 
 	for _, cmd := range cmds {
-		switch cmd.Path {
-		case "/version":
-			f := cmd.Handler.(func(context.Context) error)
-			err := errors.Join(f(ctx), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-		case "/":
-
-			ctx = context.WithValue(ctx, cli.Parent{}, "/")
-		case "/commit":
-			s := CommitArgs{}
-
-			if p := cmd.Get("all"); p != nil && p.Value != nil {
-				s.All = p.Value.(bool)
-			}
-
-			if p := cmd.Get("amend"); p != nil && p.Value != nil {
-				s.Amend = p.Value.(bool)
-			}
-
-			if p := cmd.Get("cleanup"); p != nil && p.Value != nil {
-				s.Cleanup = p.Value.(CleanupMode)
-			}
-
-			if p := cmd.Get("author"); p != nil && p.Value != nil {
-				s.Author = p.Value.(mail.Address)
-			}
-
-			if p := cmd.Get("message"); p != nil && p.Value != nil {
-				s.Message = p.Value.(string)
-			}
-
-			if p := cmd.Get("signoff"); p != nil && p.Value != nil {
-				s.Signoff = p.Value.(bool)
-			}
-
-			if p := cmd.Get("template"); p != nil && p.Value != nil {
-				s.Template = p.Value.(string)
-			}
-
-			if p := cmd.Get("paths"); p != nil && p.Value != nil {
-				s.Paths = p.Value.([]string)
-			}
-
-			f := cmd.Handler.(func(context.Context, CommitArgs) error)
-			err := errors.Join(f(ctx, s), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-
-			ctx = context.WithValue(ctx, cli.Parent{}, "/commit")
-			ctx = context.WithValue(ctx, cli.Args("/commit"), s)
-		case "/remote":
-
-			ctx = context.WithValue(ctx, cli.Parent{}, "/remote")
-		case "/remote/add":
-			s := RemoteAddArgs{}
-
-			if p := cmd.Get("fetch"); p != nil && p.Value != nil {
-				s.Fetch = p.Value.(bool)
-			}
-
-			if p := cmd.Get("name"); p != nil && p.Value != nil {
-				s.Name = p.Value.(string)
-			}
-
-			if p := cmd.Get("url"); p != nil && p.Value != nil {
-				s.URL = p.Value.(url.URL)
-			}
-
-			f := cmd.Handler.(func(context.Context, RemoteAddArgs) error)
-			err := errors.Join(f(ctx, s), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-
-			ctx = context.WithValue(ctx, cli.Parent{}, "/remote/add")
-			ctx = context.WithValue(ctx, cli.Args("/remote/add"), s)
+		if cmd.Invoke == nil {
+			continue
+		}
+		ctx, err = cmd.Invoke(ctx, cmd)
+		if err != nil {
+			return cmds, err
 		}
 	}
 

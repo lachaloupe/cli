@@ -15,9 +15,24 @@ func init() {
 
 func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	root := cli.Command{
-		Path:    "/",
-		Handler: Run,
-		Help:    "Run a command",
+		Path: "/",
+		Help: "Run a command",
+		Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+			s := Args{}
+
+			if p := cmd.Get("some-flag"); p != nil && p.Value != nil {
+				s.SomeFlag = p.Value.(string)
+			}
+
+			err := errors.Join((Run)(ctx, s), cmd.Cleanup())
+			if err != nil {
+				return ctx, err
+			}
+
+			ctx = context.WithValue(ctx, cli.Parent{}, "/")
+			ctx = context.WithValue(ctx, cli.Args("/"), s)
+			return ctx, nil
+		},
 		Args: []*cli.Arg{
 			{
 				Name: "some-flag",
@@ -35,28 +50,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	}
 
 	for _, cmd := range cmds {
-		switch cmd.Path {
-		case "/version":
-			f := cmd.Handler.(func(context.Context) error)
-			err := errors.Join(f(ctx), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-		case "/":
-			s := Args{}
-
-			if p := cmd.Get("some-flag"); p != nil && p.Value != nil {
-				s.SomeFlag = p.Value.(string)
-			}
-
-			f := cmd.Handler.(func(context.Context, Args) error)
-			err := errors.Join(f(ctx, s), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-
-			ctx = context.WithValue(ctx, cli.Parent{}, "/")
-			ctx = context.WithValue(ctx, cli.Args("/"), s)
+		if cmd.Invoke == nil {
+			continue
+		}
+		ctx, err = cmd.Invoke(ctx, cmd)
+		if err != nil {
+			return cmds, err
 		}
 	}
 

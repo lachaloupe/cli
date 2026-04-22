@@ -55,19 +55,13 @@ func (gen *Generator) Generate(filename string) error {
 }
 
 func (gen *Generator) generateInvoke(w *strings.Builder, cmd *Command) error {
-	hasVersion := false
-	for _, c := range cmd.CommandList() {
-		if c.Path == "/version" {
-			hasVersion = true
-			break
-		}
-	}
-
 	fmt.Fprintln(w, "")
 	fmt.Fprintf(w, "func invoke%s(ctx context.Context, args []string) ([]*cli.Command, error) {\n", cmd.ID)
 	fmt.Fprintln(w, "root := cli.Command{")
 
-	gen.generateCommand(w, cmd)
+	if err := gen.generateCommand(w, cmd); err != nil {
+		return err
+	}
 
 	fmt.Fprintln(w, "}")
 	fmt.Fprintln(w, "")
@@ -82,20 +76,12 @@ func (gen *Generator) generateInvoke(w *strings.Builder, cmd *Command) error {
 	fmt.Fprintln(w, "}")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "for _, cmd := range cmds {")
-	fmt.Fprintln(w, "switch cmd.Path {")
-	if !hasVersion {
-		fmt.Fprintln(w, "case \"/version\":")
-		fmt.Fprintln(w, "f := cmd.Handler.(func(context.Context) error)")
-		fmt.Fprintln(w, "err := errors.Join(f(ctx), cmd.Cleanup())")
-		fmt.Fprintln(w, "if err != nil {")
-		fmt.Fprintln(w, "return cmds, err")
-		fmt.Fprintln(w, "}")
-	}
-
-	for _, c := range cmd.CommandList() {
-		gen.generateInvokeCase(w, c)
-	}
-
+	fmt.Fprintln(w, "if cmd.Invoke == nil {")
+	fmt.Fprintln(w, "continue")
+	fmt.Fprintln(w, "}")
+	fmt.Fprintln(w, "ctx, err = cmd.Invoke(ctx, cmd)")
+	fmt.Fprintln(w, "if err != nil {")
+	fmt.Fprintln(w, "return cmds, err")
 	fmt.Fprintln(w, "}")
 	fmt.Fprintln(w, "}")
 	fmt.Fprintln(w, "")
@@ -105,66 +91,28 @@ func (gen *Generator) generateInvoke(w *strings.Builder, cmd *Command) error {
 }
 
 func (gen *Generator) generateProviderHooks(w *strings.Builder) {
-	fmt.Fprintln(w, "if root.Lookup != nil {")
-	fmt.Fprintln(w, "prevLookup := root.Lookup")
-	fmt.Fprintln(w, "root.Lookup = func(ctx context.Context, arg *cli.Arg, value string) (string, bool, error) {")
+	fmt.Fprintln(w, "for _, cmd := range root.CommandList() {")
+	fmt.Fprintln(w, "if cmd.Lookup != nil {")
+	fmt.Fprintln(w, "prevLookup := cmd.Lookup")
+	fmt.Fprintln(w, "cmd.Lookup = func(ctx context.Context, arg *cli.Arg, value string) (string, bool, error) {")
 	fmt.Fprintln(w, "if resolved, ok, err := prevLookup(ctx, arg, value); ok || err != nil {")
 	fmt.Fprintln(w, "return resolved, ok, err")
 	fmt.Fprintln(w, "}")
 	fmt.Fprintln(w, "return resolveNativeValue(ctx, arg, value)")
 	fmt.Fprintln(w, "}")
 	fmt.Fprintln(w, "} else {")
-	fmt.Fprintln(w, "root.Lookup = resolveNativeValue")
+	fmt.Fprintln(w, "cmd.Lookup = resolveNativeValue")
 	fmt.Fprintln(w, "}")
-	fmt.Fprintln(w, "if root.Open != nil {")
-	fmt.Fprintln(w, "prevOpen := root.Open")
-	fmt.Fprintln(w, "root.Open = func(ctx context.Context, arg *cli.Arg, value string) (io.Reader, bool, error) {")
+	fmt.Fprintln(w, "if cmd.Open != nil {")
+	fmt.Fprintln(w, "prevOpen := cmd.Open")
+	fmt.Fprintln(w, "cmd.Open = func(ctx context.Context, arg *cli.Arg, value string) (io.Reader, bool, error) {")
 	fmt.Fprintln(w, "if reader, ok, err := prevOpen(ctx, arg, value); ok || err != nil {")
 	fmt.Fprintln(w, "return reader, ok, err")
 	fmt.Fprintln(w, "}")
 	fmt.Fprintln(w, "return resolveNativeReader(ctx, arg, value)")
 	fmt.Fprintln(w, "}")
 	fmt.Fprintln(w, "} else {")
-	fmt.Fprintln(w, "root.Open = resolveNativeReader")
+	fmt.Fprintln(w, "cmd.Open = resolveNativeReader")
 	fmt.Fprintln(w, "}")
-}
-
-func (gen *Generator) generateInvokeCase(w *strings.Builder, c *Command) {
-	fmt.Fprintf(w, "case %q:\n", c.Path)
-
-	if c.Handler != "" {
-		if c.Struct == "" {
-			fmt.Fprintln(w, "f := cmd.Handler.(func(context.Context) error)")
-			fmt.Fprintln(w, "err := errors.Join(f(ctx), cmd.Cleanup())")
-			fmt.Fprintln(w, "if err != nil {")
-			fmt.Fprintln(w, "return cmds, err")
-			fmt.Fprintln(w, "}")
-		} else {
-			if c.New != "" {
-				fmt.Fprintf(w, "s := cmd.New.(func() %s)()\n", c.Struct)
-			} else {
-				fmt.Fprintf(w, "s := %s{}\n", c.Struct)
-			}
-
-			for _, arg := range c.Args {
-				fmt.Fprintln(w, "")
-				fmt.Fprintf(w, "if p := cmd.Get(%q); p != nil && p.Value != nil {\n", arg.Flag)
-				fmt.Fprintf(w, "s.%s = p.Value.(%s)\n", arg.Name, arg.Type)
-				fmt.Fprintln(w, "}")
-			}
-
-			fmt.Fprintln(w, "")
-			fmt.Fprintf(w, "f := cmd.Handler.(func(context.Context, %s) error)\n", c.Struct)
-			fmt.Fprintln(w, "err := errors.Join(f(ctx, s), cmd.Cleanup())")
-			fmt.Fprintln(w, "if err != nil {")
-			fmt.Fprintln(w, "return cmds, err")
-			fmt.Fprintln(w, "}")
-		}
-	}
-
-	fmt.Fprintln(w, "")
-	fmt.Fprintf(w, "ctx = context.WithValue(ctx, cli.Parent{}, %q)\n", c.Path)
-	if c.Struct != "" {
-		fmt.Fprintf(w, "ctx = context.WithValue(ctx, cli.Args(%q), s)\n", c.Path)
-	}
+	fmt.Fprintln(w, "}")
 }

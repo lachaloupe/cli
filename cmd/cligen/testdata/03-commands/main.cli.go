@@ -16,11 +16,35 @@ func init() {
 func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	root := cli.Command{
 		Path: "/",
+		Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+
+			ctx = context.WithValue(ctx, cli.Parent{}, "/")
+			return ctx, nil
+		},
 		Commands: []*cli.Command{
 			{
-				Name:    "login",
-				Path:    "/login",
-				Handler: RunLogin,
+				Name: "login",
+				Path: "/login",
+				Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+					s := LoginArgs{}
+
+					if p := cmd.Get("user"); p != nil && p.Value != nil {
+						s.User = p.Value.(string)
+					}
+
+					if p := cmd.Get("password"); p != nil && p.Value != nil {
+						s.Password = p.Value.(string)
+					}
+
+					err := errors.Join((RunLogin)(ctx, s), cmd.Cleanup())
+					if err != nil {
+						return ctx, err
+					}
+
+					ctx = context.WithValue(ctx, cli.Parent{}, "/login")
+					ctx = context.WithValue(ctx, cli.Args("/login"), s)
+					return ctx, nil
+				},
 				Args: []*cli.Arg{
 					{
 						Name: "user",
@@ -36,7 +60,16 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Name:    "logout",
 				Path:    "/logout",
 				Aliases: []string{"signout"},
-				Handler: RunLogout,
+				Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+
+					err := errors.Join((RunLogout)(ctx), cmd.Cleanup())
+					if err != nil {
+						return ctx, err
+					}
+
+					ctx = context.WithValue(ctx, cli.Parent{}, "/logout")
+					return ctx, nil
+				},
 			},
 		},
 	}
@@ -49,43 +82,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	}
 
 	for _, cmd := range cmds {
-		switch cmd.Path {
-		case "/version":
-			f := cmd.Handler.(func(context.Context) error)
-			err := errors.Join(f(ctx), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-		case "/":
-
-			ctx = context.WithValue(ctx, cli.Parent{}, "/")
-		case "/login":
-			s := LoginArgs{}
-
-			if p := cmd.Get("user"); p != nil && p.Value != nil {
-				s.User = p.Value.(string)
-			}
-
-			if p := cmd.Get("password"); p != nil && p.Value != nil {
-				s.Password = p.Value.(string)
-			}
-
-			f := cmd.Handler.(func(context.Context, LoginArgs) error)
-			err := errors.Join(f(ctx, s), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-
-			ctx = context.WithValue(ctx, cli.Parent{}, "/login")
-			ctx = context.WithValue(ctx, cli.Args("/login"), s)
-		case "/logout":
-			f := cmd.Handler.(func(context.Context) error)
-			err := errors.Join(f(ctx), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-
-			ctx = context.WithValue(ctx, cli.Parent{}, "/logout")
+		if cmd.Invoke == nil {
+			continue
+		}
+		ctx, err = cmd.Invoke(ctx, cmd)
+		if err != nil {
+			return cmds, err
 		}
 	}
 

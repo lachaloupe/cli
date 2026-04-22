@@ -11,4 +11,3 @@ Options:
   --message        Use the given message as the commit message. (string, default: $GIT_MESSAGE | @COMMIT_EDITMSG)
   --signoff        Add a Signed-off-by trailer. (bool)
   --template       Use this template file when preparing the message. (string, labels: path=exists, path=file, path=readable, path=clean)
-

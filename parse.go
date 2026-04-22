@@ -12,6 +12,7 @@ import (
 )
 
 // Parse walks the command tree, parses arguments, and returns the matched command path.
+// Parse stores parsed argument values and cleanup handlers on the command tree itself, so callers that need an independent parse should build a fresh tree.
 func (c *Command) Parse(ctx context.Context, args []string) ([]*Command, error) {
 	list := []*Command{}
 	next := c

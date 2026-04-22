@@ -3,89 +3,145 @@ package main
 import (
 	"fmt"
 	"go/ast"
+	"go/types"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
 
 func (gen *Generator) parseFunctions(pkgs []*packages.Package, root *Command) error {
+	errorType := types.Universe.Lookup("error").Type()
+
 	for _, cmd := range root.CommandList() {
-		if cmd.Handler == "" {
+		if cmd.HandlerExpr == nil {
 			continue
 		}
 
-		pkg, name, alias, err := gen.resolvePackageSymbol(pkgs, cmd.Handler, "handler")
-		if err != nil {
-			return err
-		}
+		if cmd.HandlerRef != "" {
+			pkg, name := pkgs[0], cmd.HandlerRef
 
-		fn := func() *ast.FuncDecl {
-			for _, file := range pkg.Syntax {
-				for _, decl := range file.Decls {
-					if candidate, ok := decl.(*ast.FuncDecl); ok && candidate.Name != nil && candidate.Recv == nil && candidate.Name.Name == name {
-						return candidate
-					}
+			if alias, item, ok := strings.Cut(cmd.HandlerRef, "."); ok {
+				if alias == "" || item == "" || strings.Contains(item, ".") {
+					return fmt.Errorf("%s: missing handler %q", cmd.Path, cmd.HandlerRef)
 				}
+
+				path := gen.SourceImports[alias]
+				if path == "" {
+					return fmt.Errorf("%s: missing import for %q", cmd.Path, alias)
+				}
+
+				loaded, err := gen.loadPackage(pkgs, path)
+				if err != nil {
+					return err
+				}
+
+				pkg, name = loaded, item
 			}
 
-			return nil
-		}()
+			func() {
+				for _, file := range pkg.Syntax {
+					for _, decl := range file.Decls {
+						fn, ok := decl.(*ast.FuncDecl)
+						if !ok || fn.Name == nil || fn.Recv != nil || fn.Name.Name != name {
+							continue
+						}
 
-		if fn == nil {
-			return fmt.Errorf("missing handler %q", cmd.Handler)
-		}
-
-		if cg := fn.Doc; cg != nil {
-			cmd.Doc = strings.TrimSuffix(cg.Text(), "\n")
-
-			for _, line := range cg.List {
-				if d, ok := strings.CutPrefix(line.Text, "//cli:"); ok {
-					cmd.Directives = append(cmd.Directives, d)
-				}
-			}
-		}
-
-		valid := false
-		if fn.Type != nil && fn.Type.Params != nil {
-			if len(fn.Type.Params.List) > 0 && len(fn.Type.Params.List) <= 2 {
-				if ctx, ok := fn.Type.Params.List[0].Type.(*ast.SelectorExpr); ok {
-					if p, ok := ctx.X.(*ast.Ident); ok && p.Name == "context" && ctx.Sel.Name == "Context" {
-						if fn.Type.Results != nil && len(fn.Type.Results.List) == 1 {
-							if result, ok := fn.Type.Results.List[0].Type.(*ast.Ident); ok && result.Name == "error" {
-								valid = true
-
-								if len(fn.Type.Params.List) == 2 {
-									valid = false
-
-									switch arg := fn.Type.Params.List[1].Type.(type) {
-									case *ast.Ident:
-										if alias == "" {
-											cmd.Struct = arg.Name
-										} else {
-											cmd.Struct = alias + "." + arg.Name
-										}
-										valid = true
-									case *ast.SelectorExpr:
-										if alias != "" {
-											return fmt.Errorf("%s: imported handlers must use an args struct from the same package", cmd.Handler)
-										}
-
-										if pkg, ok := arg.X.(*ast.Ident); ok {
-											cmd.Struct = pkg.Name + "." + arg.Sel.Name
-											valid = true
-										}
-									}
+						if doc := fn.Doc; doc != nil {
+							cmd.Doc = strings.TrimSuffix(doc.Text(), "\n")
+							for _, line := range doc.List {
+								if d, ok := strings.CutPrefix(line.Text, "//cli:"); ok {
+									cmd.Directives = append(cmd.Directives, d)
 								}
 							}
 						}
+
+						return
 					}
 				}
+			}()
+		}
+
+		arg, ok := func() (*types.TypeName, bool) {
+			if gen.TypesInfo == nil {
+				return nil, false
+			}
+
+			t := gen.TypesInfo.TypeOf(cmd.HandlerExpr)
+			if t == nil {
+				return nil, false
+			}
+
+			sig, ok := types.Unalias(t).Underlying().(*types.Signature)
+			if !ok || sig.Params() == nil || sig.Results() == nil {
+				return nil, false
+			}
+
+			if sig.Params().Len() == 0 || sig.Params().Len() > 2 {
+				return nil, false
+			}
+
+			if sig.Results().Len() != 1 || !types.Identical(sig.Results().At(0).Type(), errorType) {
+				return nil, false
+			}
+
+			ctx, ok := types.Unalias(sig.Params().At(0).Type()).(*types.Named)
+			if !ok {
+				return nil, false
+			}
+
+			if obj := ctx.Obj(); obj == nil || obj.Name() != "Context" || obj.Pkg() == nil || obj.Pkg().Path() != "context" {
+				return nil, false
+			}
+
+			if sig.Params().Len() == 1 {
+				return nil, true
+			}
+
+			arg, ok := types.Unalias(sig.Params().At(1).Type()).(*types.Named)
+			if !ok {
+				return nil, false
+			}
+
+			if _, ok := arg.Underlying().(*types.Struct); !ok {
+				return nil, false
+			}
+
+			obj := arg.Obj()
+			return obj, obj != nil
+		}()
+
+		if !ok {
+			return fmt.Errorf("%s: expecting Handler to be func(context.Context[, arg SomeArgs]) error", cmd.Path)
+		}
+
+		if arg == nil {
+			continue
+		}
+
+		cmd.StructName = arg.Name()
+
+		pkg := arg.Pkg()
+		if pkg == nil || pkg.Path() == "" || pkg.Path() == gen.PackagePath {
+			cmd.Struct = cmd.StructName
+			cmd.StructPath = ""
+			continue
+		}
+
+		cmd.StructPath = pkg.Path()
+
+		alias := pkg.Name()
+		for name, imported := range gen.SourceImports {
+			if imported == cmd.StructPath {
+				alias = gen.addImport(cmd.StructPath, name)
+				break
 			}
 		}
 
-		if !valid {
-			return fmt.Errorf("%s: expecting Handler to be func(context.Context[, arg SomeArgs]) error", cmd.Handler)
+		if alias == pkg.Name() {
+			alias = gen.addImport(cmd.StructPath, alias)
 		}
+
+		cmd.Struct = alias + "." + cmd.StructName
 	}
 
 	return nil

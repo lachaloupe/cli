@@ -106,6 +106,15 @@ func TestUsingExamples(t *testing.T) {
 	if err := os.WriteFile(unreadableCACert, []byte("cert"), 0000); err != nil {
 		t.Fatal(err)
 	}
+	cleanParent := filepath.Join(dir, "clean-parent")
+	if err := os.Mkdir(cleanParent, 0755); err != nil {
+		t.Fatal(err)
+	}
+	cleanTemplateTarget := filepath.Join(dir, "template.txt")
+	if err := os.WriteFile(cleanTemplateTarget, []byte("template"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cleanTemplate := filepath.Join(cleanParent, "..", "template.txt")
 
 	t.Setenv("GOCOVERDIR", cov)
 	t.Setenv("GOWORK", "off")
@@ -133,6 +142,7 @@ func TestUsingExamples(t *testing.T) {
 		"09-percentile",
 		"10-sync",
 		"11-aws",
+		"12-http",
 	}
 
 	for _, name := range examples {
@@ -500,6 +510,12 @@ func TestUsingExamples(t *testing.T) {
 			expected: "error: invalid value for argument \"template\": \"template\" must reference a file\n",
 		},
 		{
+			name:     "template-clean-backtrack",
+			binary:   "06-git",
+			args:     []string{"commit", "--template", cleanTemplate, "-m", "template check"},
+			expected: "commit all=false amend=false cleanup=strip author= message=template check signoff=false template=" + cleanTemplate + " paths=\n",
+		},
+		{
 			name:     "copy",
 			binary:   "07-cp",
 			args:     []string{"-a", "-R=true", "--manifest", copyManifestArg, "bin/*.txt", "docs/guide.txt", copyDestinationArg},
@@ -747,6 +763,16 @@ func TestUsingExamples(t *testing.T) {
 			args:     []string{"s3://ont-open-data"},
 			status:   1,
 			expected: "error: invalid value for argument \"files\": files: invalid S3 URI \"s3://ont-open-data\"\n",
+		},
+		{
+			name:   "help",
+			binary: "12-http",
+			args:   []string{"--help"},
+		},
+		{
+			name:   "serve-help",
+			binary: "12-http",
+			args:   []string{"serve", "--help"},
 		},
 	}
 

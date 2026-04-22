@@ -5,12 +5,33 @@ on:
   push:
     branches:
       - main
+    tags:
+      - v*
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  check-tag-sync:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Check cligen depends on tagged cli version
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -eu
+
+          expected="github.com/lachaloupe/cli $VERSION"
+          if ! grep -Fq "$expected" cmd/cligen/go.mod; then
+            echo "expected to find '$expected' in cmd/cligen/go.mod"
+            exit 1
+          fi
+
   test:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest

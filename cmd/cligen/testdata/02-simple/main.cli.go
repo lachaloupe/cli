@@ -15,9 +15,44 @@ func init() {
 
 func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	root := cli.Command{
-		Path:    "/",
-		Handler: Search,
-		Help:    "Simple version of grep",
+		Path: "/",
+		Help: "Simple version of grep",
+		Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+			s := Args{}
+
+			if p := cmd.Get("pattern"); p != nil && p.Value != nil {
+				s.Pattern = p.Value.(string)
+			}
+
+			if p := cmd.Get("paths"); p != nil && p.Value != nil {
+				s.Paths = p.Value.([]string)
+			}
+
+			if p := cmd.Get("ignore-case"); p != nil && p.Value != nil {
+				s.IgnoreCase = p.Value.(bool)
+			}
+
+			if p := cmd.Get("invert-match"); p != nil && p.Value != nil {
+				s.InvertMatch = p.Value.(bool)
+			}
+
+			if p := cmd.Get("recursive"); p != nil && p.Value != nil {
+				s.Recursive = p.Value.(bool)
+			}
+
+			if p := cmd.Get("max-count"); p != nil && p.Value != nil {
+				s.MaxCount = p.Value.(uint)
+			}
+
+			err := errors.Join((Search)(ctx, s), cmd.Cleanup())
+			if err != nil {
+				return ctx, err
+			}
+
+			ctx = context.WithValue(ctx, cli.Parent{}, "/")
+			ctx = context.WithValue(ctx, cli.Args("/"), s)
+			return ctx, nil
+		},
 		Args: []*cli.Arg{
 			{
 				Name:       "pattern",
@@ -68,48 +103,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	}
 
 	for _, cmd := range cmds {
-		switch cmd.Path {
-		case "/version":
-			f := cmd.Handler.(func(context.Context) error)
-			err := errors.Join(f(ctx), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-		case "/":
-			s := Args{}
-
-			if p := cmd.Get("pattern"); p != nil && p.Value != nil {
-				s.Pattern = p.Value.(string)
-			}
-
-			if p := cmd.Get("paths"); p != nil && p.Value != nil {
-				s.Paths = p.Value.([]string)
-			}
-
-			if p := cmd.Get("ignore-case"); p != nil && p.Value != nil {
-				s.IgnoreCase = p.Value.(bool)
-			}
-
-			if p := cmd.Get("invert-match"); p != nil && p.Value != nil {
-				s.InvertMatch = p.Value.(bool)
-			}
-
-			if p := cmd.Get("recursive"); p != nil && p.Value != nil {
-				s.Recursive = p.Value.(bool)
-			}
-
-			if p := cmd.Get("max-count"); p != nil && p.Value != nil {
-				s.MaxCount = p.Value.(uint)
-			}
-
-			f := cmd.Handler.(func(context.Context, Args) error)
-			err := errors.Join(f(ctx, s), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-
-			ctx = context.WithValue(ctx, cli.Parent{}, "/")
-			ctx = context.WithValue(ctx, cli.Args("/"), s)
+		if cmd.Invoke == nil {
+			continue
+		}
+		ctx, err = cmd.Invoke(ctx, cmd)
+		if err != nil {
+			return cmds, err
 		}
 	}
 

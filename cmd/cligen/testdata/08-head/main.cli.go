@@ -16,10 +16,40 @@ func init() {
 
 func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	root := cli.Command{
-		Path:    "/",
-		Handler: RunHead,
-		New:     NewArgs,
-		Help:    "Output the first part of files",
+		Path: "/",
+		Help: "Output the first part of files",
+		Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+			s := (NewArgs)()
+
+			if p := cmd.Get("bytes"); p != nil && p.Value != nil {
+				s.Bytes = p.Value.(uint)
+			}
+
+			if p := cmd.Get("lines"); p != nil && p.Value != nil {
+				s.Lines = p.Value.(uint)
+			}
+
+			if p := cmd.Get("quiet"); p != nil && p.Value != nil {
+				s.Quiet = p.Value.(bool)
+			}
+
+			if p := cmd.Get("verbose"); p != nil && p.Value != nil {
+				s.Verbose = p.Value.(bool)
+			}
+
+			if p := cmd.Get("files"); p != nil && p.Value != nil {
+				s.Files = p.Value.([]io.Reader)
+			}
+
+			err := errors.Join((RunHead)(ctx, s), cmd.Cleanup())
+			if err != nil {
+				return ctx, err
+			}
+
+			ctx = context.WithValue(ctx, cli.Parent{}, "/")
+			ctx = context.WithValue(ctx, cli.Args("/"), s)
+			return ctx, nil
+		},
 		Args: []*cli.Arg{
 			{
 				Name:    "bytes",
@@ -63,44 +93,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	}
 
 	for _, cmd := range cmds {
-		switch cmd.Path {
-		case "/version":
-			f := cmd.Handler.(func(context.Context) error)
-			err := errors.Join(f(ctx), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-		case "/":
-			s := cmd.New.(func() Args)()
-
-			if p := cmd.Get("bytes"); p != nil && p.Value != nil {
-				s.Bytes = p.Value.(uint)
-			}
-
-			if p := cmd.Get("lines"); p != nil && p.Value != nil {
-				s.Lines = p.Value.(uint)
-			}
-
-			if p := cmd.Get("quiet"); p != nil && p.Value != nil {
-				s.Quiet = p.Value.(bool)
-			}
-
-			if p := cmd.Get("verbose"); p != nil && p.Value != nil {
-				s.Verbose = p.Value.(bool)
-			}
-
-			if p := cmd.Get("files"); p != nil && p.Value != nil {
-				s.Files = p.Value.([]io.Reader)
-			}
-
-			f := cmd.Handler.(func(context.Context, Args) error)
-			err := errors.Join(f(ctx, s), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-
-			ctx = context.WithValue(ctx, cli.Parent{}, "/")
-			ctx = context.WithValue(ctx, cli.Args("/"), s)
+		if cmd.Invoke == nil {
+			continue
+		}
+		ctx, err = cmd.Invoke(ctx, cmd)
+		if err != nil {
+			return cmds, err
 		}
 	}
 

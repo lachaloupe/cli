@@ -60,7 +60,12 @@ func (c *Command) openReader(ctx context.Context, arg *Arg, s string) (io.Reader
 	if u, err := url.Parse(s); err == nil && u.Scheme != "" {
 		switch u.Scheme {
 		case "http", "https":
-			resp, err := http.DefaultClient.Get(s)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, s, nil)
+			if err != nil {
+				return nil, fmt.Errorf("%s: build GET %q: %w", arg.Name, s, err)
+			}
+
+			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				return nil, fmt.Errorf("%s: GET %q: %w", arg.Name, s, err)
 			}

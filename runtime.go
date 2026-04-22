@@ -58,10 +58,12 @@ func (c *Command) AddBuiltins() {
 	}
 
 	c.Commands = append(c.Commands, &Command{
-		Name:    "version",
-		Path:    "/version",
-		Help:    "Show version information.",
-		Handler: RunVersion,
+		Name: "version",
+		Path: "/version",
+		Help: "Show version information.",
+		Invoke: func(ctx context.Context, cmd *Command) (context.Context, error) {
+			return ctx, errors.Join(RunVersion(ctx), cmd.Cleanup())
+		},
 	})
 }
 
@@ -94,7 +96,7 @@ func (c *Command) Main() {
 			os.Exit(1)
 		}
 
-		fmt.Fprintln(os.Stderr, Help(cmds))
+		fmt.Fprint(os.Stderr, Help(cmds))
 	}
 }
 

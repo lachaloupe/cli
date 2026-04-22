@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
+	"go/ast"
+	"go/format"
 	"io"
 	"slices"
 	"strings"
 )
 
-func (gen *Generator) generateCommand(w io.Writer, cmd *Command) {
+func (gen *Generator) generateCommand(w io.Writer, cmd *Command) error {
 	if cmd.Name != "" {
 		fmt.Fprintf(w, "Name: %q,\n", cmd.Name)
 	}
@@ -18,20 +20,22 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) {
 		fmt.Fprintf(w, "Aliases: %#v,\n", cmd.Aliases)
 	}
 
-	if cmd.Handler != "" {
-		fmt.Fprintf(w, "Handler: %s,\n", cmd.Handler)
+	if cmd.LookupExpr != nil {
+		expr, err := gen.formatExpr(cmd.LookupExpr)
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintf(w, "Lookup: %s,\n", expr)
 	}
 
-	if cmd.New != "" {
-		fmt.Fprintf(w, "New: %s,\n", cmd.New)
-	}
+	if cmd.OpenExpr != nil {
+		expr, err := gen.formatExpr(cmd.OpenExpr)
+		if err != nil {
+			return err
+		}
 
-	if cmd.Lookup != "" {
-		fmt.Fprintf(w, "Lookup: %s,\n", cmd.Lookup)
-	}
-
-	if cmd.Open != "" {
-		fmt.Fprintf(w, "Open: %s,\n", cmd.Open)
+		fmt.Fprintf(w, "Open: %s,\n", expr)
 	}
 
 	help := cmd.Help
@@ -42,6 +46,23 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) {
 
 	if help != "" {
 		fmt.Fprintf(w, "Help: %q,\n", help)
+	}
+
+	if cmd.Template != "" {
+		fmt.Fprintf(w, "Template: %q,\n", cmd.Template)
+	}
+
+	if cmd.RendererExpr != nil {
+		expr, err := gen.formatExpr(cmd.RendererExpr)
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintf(w, "Renderer: %s,\n", expr)
+	}
+
+	if err := gen.generateCommandInvoke(w, cmd); err != nil {
+		return err
 	}
 
 	if len(cmd.Args) != 0 {
@@ -160,10 +181,76 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) {
 
 		for _, c := range cmd.Commands {
 			fmt.Fprintln(w, "{")
-			gen.generateCommand(w, c)
+			if err := gen.generateCommand(w, c); err != nil {
+				return err
+			}
 			fmt.Fprintln(w, "},")
 		}
 
 		fmt.Fprintln(w, "},")
 	}
+
+	return nil
+}
+
+func (gen *Generator) generateCommandInvoke(w io.Writer, cmd *Command) error {
+	fmt.Fprintln(w, "Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {")
+
+	if cmd.Struct != "" {
+		if cmd.NewExpr != nil {
+			expr, err := gen.formatExpr(cmd.NewExpr)
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprintf(w, "s := (%s)()\n", expr)
+		} else {
+			fmt.Fprintf(w, "s := %s{}\n", cmd.Struct)
+		}
+
+		for _, arg := range cmd.Args {
+			fmt.Fprintln(w, "")
+			fmt.Fprintf(w, "if p := cmd.Get(%q); p != nil && p.Value != nil {\n", arg.Flag)
+			fmt.Fprintf(w, "s.%s = p.Value.(%s)\n", arg.Name, arg.Type)
+			fmt.Fprintln(w, "}")
+		}
+	}
+
+	if cmd.HandlerExpr != nil {
+		expr, err := gen.formatExpr(cmd.HandlerExpr)
+		if err != nil {
+			return err
+		}
+
+		gen.Imports["errors"] = ""
+		fmt.Fprintln(w, "")
+
+		if cmd.Struct == "" {
+			fmt.Fprintf(w, "err := errors.Join((%s)(ctx), cmd.Cleanup())\n", expr)
+		} else {
+			fmt.Fprintf(w, "err := errors.Join((%s)(ctx, s), cmd.Cleanup())\n", expr)
+		}
+
+		fmt.Fprintln(w, "if err != nil {")
+		fmt.Fprintln(w, "return ctx, err")
+		fmt.Fprintln(w, "}")
+	}
+
+	fmt.Fprintln(w, "")
+	fmt.Fprintf(w, "ctx = context.WithValue(ctx, cli.Parent{}, %q)\n", cmd.Path)
+	if cmd.Struct != "" {
+		fmt.Fprintf(w, "ctx = context.WithValue(ctx, cli.Args(%q), s)\n", cmd.Path)
+	}
+	fmt.Fprintln(w, "return ctx, nil")
+	fmt.Fprintln(w, "},")
+	return nil
+}
+
+func (gen *Generator) formatExpr(expr ast.Expr) (string, error) {
+	w := &strings.Builder{}
+	if err := format.Node(w, gen.Fset, expr); err != nil {
+		return "", err
+	}
+
+	return w.String(), nil
 }

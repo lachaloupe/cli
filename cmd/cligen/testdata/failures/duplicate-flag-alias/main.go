@@ -1,0 +1,24 @@
+package main
+
+import (
+	"context"
+
+	"github.com/lachaloupe/cli"
+)
+
+var CLI = cli.Command{
+	Handler: Run,
+}
+
+type Args struct {
+	//cli:alias=x
+	One string
+
+	//cli:alias=x
+	Two string
+}
+
+func Run(ctx context.Context, args Args) error {
+	_, _ = ctx, args
+	return nil
+}

@@ -24,4 +24,3 @@ Options (global):
   --host           Daemon socket to connect to. ([]string, default: unix:///var/run/docker.sock)
   --tls            Use TLS. (bool)
   --tlscacert      Trust certs signed only by this CA. (string, labels: path=file, path=creatable, path=clean)
-

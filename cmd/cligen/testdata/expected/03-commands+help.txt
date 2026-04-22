@@ -4,4 +4,3 @@ Subcommands:
   login            
   logout           
   version          Show version information.
-

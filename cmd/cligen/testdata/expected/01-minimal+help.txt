@@ -7,4 +7,3 @@ Options:
 
 Subcommands:
   version          Show version information.
-

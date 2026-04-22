@@ -106,9 +106,24 @@ func resolveNativeReader(ctx context.Context, arg *cli.Arg, value string) (io.Re
 
 func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	root := cli.Command{
-		Path:    "/",
-		Handler: RunCat,
-		Help:    "Print the contents of HTTP or S3 objects",
+		Path: "/",
+		Help: "Print the contents of HTTP or S3 objects",
+		Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+			s := Args{}
+
+			if p := cmd.Get("files"); p != nil && p.Value != nil {
+				s.Files = p.Value.([]io.Reader)
+			}
+
+			err := errors.Join((RunCat)(ctx, s), cmd.Cleanup())
+			if err != nil {
+				return ctx, err
+			}
+
+			ctx = context.WithValue(ctx, cli.Parent{}, "/")
+			ctx = context.WithValue(ctx, cli.Args("/"), s)
+			return ctx, nil
+		},
 		Args: []*cli.Arg{
 			{
 				Name:       "files",
@@ -122,27 +137,29 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 
 	root.AddBuiltins()
 
-	if root.Lookup != nil {
-		prevLookup := root.Lookup
-		root.Lookup = func(ctx context.Context, arg *cli.Arg, value string) (string, bool, error) {
-			if resolved, ok, err := prevLookup(ctx, arg, value); ok || err != nil {
-				return resolved, ok, err
+	for _, cmd := range root.CommandList() {
+		if cmd.Lookup != nil {
+			prevLookup := cmd.Lookup
+			cmd.Lookup = func(ctx context.Context, arg *cli.Arg, value string) (string, bool, error) {
+				if resolved, ok, err := prevLookup(ctx, arg, value); ok || err != nil {
+					return resolved, ok, err
+				}
+				return resolveNativeValue(ctx, arg, value)
 			}
-			return resolveNativeValue(ctx, arg, value)
+		} else {
+			cmd.Lookup = resolveNativeValue
 		}
-	} else {
-		root.Lookup = resolveNativeValue
-	}
-	if root.Open != nil {
-		prevOpen := root.Open
-		root.Open = func(ctx context.Context, arg *cli.Arg, value string) (io.Reader, bool, error) {
-			if reader, ok, err := prevOpen(ctx, arg, value); ok || err != nil {
-				return reader, ok, err
+		if cmd.Open != nil {
+			prevOpen := cmd.Open
+			cmd.Open = func(ctx context.Context, arg *cli.Arg, value string) (io.Reader, bool, error) {
+				if reader, ok, err := prevOpen(ctx, arg, value); ok || err != nil {
+					return reader, ok, err
+				}
+				return resolveNativeReader(ctx, arg, value)
 			}
-			return resolveNativeReader(ctx, arg, value)
+		} else {
+			cmd.Open = resolveNativeReader
 		}
-	} else {
-		root.Open = resolveNativeReader
 	}
 	cmds, err := root.Parse(ctx, args)
 	if err != nil {
@@ -150,28 +167,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	}
 
 	for _, cmd := range cmds {
-		switch cmd.Path {
-		case "/version":
-			f := cmd.Handler.(func(context.Context) error)
-			err := errors.Join(f(ctx), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-		case "/":
-			s := Args{}
-
-			if p := cmd.Get("files"); p != nil && p.Value != nil {
-				s.Files = p.Value.([]io.Reader)
-			}
-
-			f := cmd.Handler.(func(context.Context, Args) error)
-			err := errors.Join(f(ctx, s), cmd.Cleanup())
-			if err != nil {
-				return cmds, err
-			}
-
-			ctx = context.WithValue(ctx, cli.Parent{}, "/")
-			ctx = context.WithValue(ctx, cli.Args("/"), s)
+		if cmd.Invoke == nil {
+			continue
+		}
+		ctx, err = cmd.Invoke(ctx, cmd)
+		if err != nil {
+			return cmds, err
 		}
 	}
 

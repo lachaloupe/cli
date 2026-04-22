@@ -3,13 +3,39 @@ package main
 import (
 	"fmt"
 	"go/ast"
+	"go/constant"
 	"go/token"
+	"go/types"
 	"path/filepath"
+	"strconv"
 	"unicode"
 )
 
 func (gen *Generator) parseCommand(cmd *Command, lit *ast.CompositeLit) error {
 	seen := make(map[string]struct{})
+
+	stringValue := func(value ast.Expr) (string, bool) {
+		p, ok := value.(*ast.BasicLit)
+		if !ok || p.Kind != token.STRING {
+			if gen.TypesInfo == nil {
+				return "", false
+			}
+
+			tv, ok := gen.TypesInfo.Types[value]
+			if !ok || tv.Value == nil || tv.Value.Kind() != constant.String {
+				return "", false
+			}
+
+			return constant.StringVal(tv.Value), true
+		}
+
+		s, err := strconv.Unquote(p.Value)
+		if err != nil {
+			return "", false
+		}
+
+		return s, true
+	}
 
 	for _, elt := range lit.Elts {
 		kv, ok := elt.(*ast.KeyValueExpr)
@@ -33,47 +59,61 @@ func (gen *Generator) parseCommand(cmd *Command, lit *ast.CompositeLit) error {
 			if err := gen.parseSubcommands(cmd, kv.Value); err != nil {
 				return err
 			}
-		case "Handler", "New", "Lookup", "Open":
-			value := ""
-			if p, ok := kv.Value.(*ast.Ident); ok {
-				value = p.Name
-			} else if p, ok := kv.Value.(*ast.SelectorExpr); ok {
-				if pkg, ok := p.X.(*ast.Ident); ok {
-					if path := gen.SourceImports[pkg.Name]; path != "" {
-						if pkg.Name == filepath.Base(path) {
-							gen.Imports[path] = ""
-						} else {
-							gen.Imports[path] = pkg.Name
-						}
+		case "Handler", "Renderer", "New", "Lookup", "Open":
+			if gen.TypesInfo != nil {
+				ast.Inspect(kv.Value, func(node ast.Node) bool {
+					id, ok := node.(*ast.Ident)
+					if !ok {
+						return true
 					}
 
-					value = fmt.Sprintf("%s.%s", pkg.Name, p.Sel.Name)
-				}
-			}
+					pkg, ok := gen.TypesInfo.Uses[id].(*types.PkgName)
+					if !ok || pkg.Imported() == nil {
+						return true
+					}
 
-			if value == "" {
-				return fmt.Errorf("%s: expecting %s to be a function name", cmd.Path, key.Name)
+					gen.addImport(pkg.Imported().Path(), id.Name)
+					return true
+				})
 			}
 
 			switch key.Name {
 			case "Handler":
-				cmd.Handler = value
+				cmd.HandlerExpr = kv.Value
+
+				switch expr := kv.Value.(type) {
+				case *ast.Ident:
+					if gen.TypesInfo != nil {
+						if _, ok := gen.TypesInfo.Uses[expr].(*types.Func); ok {
+							cmd.HandlerRef = expr.Name
+						}
+					}
+				case *ast.SelectorExpr:
+					pkg, ok := expr.X.(*ast.Ident)
+					if !ok || gen.TypesInfo == nil {
+						break
+					}
+
+					if _, ok := gen.TypesInfo.Uses[pkg].(*types.PkgName); !ok {
+						break
+					}
+
+					if _, ok := gen.TypesInfo.Uses[expr.Sel].(*types.Func); ok {
+						cmd.HandlerRef = fmt.Sprintf("%s.%s", pkg.Name, expr.Sel.Name)
+					}
+				}
+			case "Renderer":
+				cmd.RendererExpr = kv.Value
 			case "New":
-				cmd.New = value
+				cmd.NewExpr = kv.Value
 			case "Lookup":
-				cmd.Lookup = value
+				cmd.LookupExpr = kv.Value
 			case "Open":
-				cmd.Open = value
+				cmd.OpenExpr = kv.Value
 			}
 		case "Name":
-			value := ""
-			if p, ok := kv.Value.(*ast.BasicLit); ok {
-				if p.Kind == token.STRING && len(p.Value) > 2 {
-					value = p.Value[1 : len(p.Value)-1]
-				}
-			}
-
-			if value == "" {
+			value, ok := stringValue(kv.Value)
+			if !ok || value == "" {
 				return fmt.Errorf("%s: expected Name: \"name\"", cmd.Path)
 			}
 
@@ -86,18 +126,19 @@ func (gen *Generator) parseCommand(cmd *Command, lit *ast.CompositeLit) error {
 			cmd.Path = filepath.Join(filepath.Dir(cmd.Path), value)
 			cmd.Name = value
 		case "Help":
-			value := ""
-			if p, ok := kv.Value.(*ast.BasicLit); ok {
-				if p.Kind == token.STRING && len(p.Value) > 2 {
-					value = p.Value[1 : len(p.Value)-1]
-				}
-			}
-
-			if value == "" {
+			value, ok := stringValue(kv.Value)
+			if !ok || value == "" {
 				return fmt.Errorf("%s: expected Help: \"text\"", cmd.Path)
 			}
 
 			cmd.Help = value
+		case "Template":
+			value, ok := stringValue(kv.Value)
+			if !ok {
+				return fmt.Errorf("%s: expected Template: \"text\"", cmd.Path)
+			}
+
+			cmd.Template = value
 		default:
 			return fmt.Errorf("%s: cli.Command do not have a field named %q", cmd.Path, key.Name)
 		}

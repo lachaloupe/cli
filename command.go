@@ -29,8 +29,11 @@ type Command struct {
 	Aliases  []string
 	Path     string
 	Help     string
+	Template string
 	Handler  any
 	New      any
+	Renderer Renderer
+	Invoke   func(context.Context, *Command) (context.Context, error)
 	Args     []*Arg
 	Commands []*Command
 	Lookup   func(context.Context, *Arg, string) (string, bool, error)

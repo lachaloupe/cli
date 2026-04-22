@@ -60,8 +60,10 @@ func PathValidate(arg *Arg, path string) error {
 
 			rest := path[len(volume):]
 			depth := 0
+			limit := 0
 			if filepath.IsAbs(path) {
 				depth = 1
+				limit = 1
 			}
 
 			start := 0
@@ -76,7 +78,7 @@ func PathValidate(arg *Arg, path string) error {
 				switch part {
 				case "", ".":
 				case "..":
-					if depth <= 1 {
+					if depth == limit {
 						return &PathError{Kind: ErrPathClean, Arg: arg.Name, Path: path, Label: label}
 					}
 					depth--

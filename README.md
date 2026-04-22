@@ -171,7 +171,7 @@ These directives shape the generated CLI.
 | `//cli:path=abs` | Path must be absolute. |
 | `//cli:path=rel` | Path must be relative. |
 | `//cli:path=exec` | Path must be executable. |
-| `//cli:path=clean` | Path must be lexically clean. |
+| `//cli:path=clean` | Path must not backtrack outside its lexical root. |
 | `//cli:path=empty` | Path must be an empty directory. |
 | `//cli:path=glob` | Value must be a valid glob pattern. |
 | `//cli:path=.ext` | Path must use one of the allowed file extensions. |
@@ -210,7 +210,10 @@ See [06-git](./cmd/cligen/testdata/06-git).
 ## Native type parsing
 
 Built-in scalar types are parsed automatically, and so are slices of those types.
-Type supporting the `encoding.TextUnmarshaler` interface are supported too, which makes common standard-library types work out of the box.
+Types supporting the `encoding.TextUnmarshaler` interface are supported too, which makes common standard-library types work out of the box.
+
+For generated CLIs, that `encoding.TextUnmarshaler` path is the expected extension point for non-native field types.
+If a generated field uses a custom type that does not implement `encoding.TextUnmarshaler`, model it as a native field instead or define a manual `cli.Arg.Parse` hook on a handwritten `cli.Command`.
 
 Examples include:
 
@@ -424,6 +427,8 @@ See [11-aws](./cmd/cligen/testdata/11-aws).
 ## Runtime hooks
 
 The generated CLI is still just a `cli.Command`, so you can customize runtime behavior when needed.
+Hook values may be plain function names, function literals, or expressions that evaluate to the expected function type.
+`Command.Parse` also mutates the tree in place by storing parsed values and cleanup handlers on the command nodes, so build a fresh tree when you need independent parses.
 
 | Hook | Purpose |
 | --- | --- |
@@ -450,6 +455,29 @@ func NewArgs() Args {
 
 In [08-head](./cmd/cligen/testdata/08-head), this makes standard input the default when no files are passed.
 
+The same hook can also come from an expression when you want to configure a reusable handler:
+
+```go
+var mux = func() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(http.ResponseWriter, *http.Request) {})
+	return mux
+}()
+
+var CLI = cli.Command{
+	Commands: []*cli.Command{
+		{
+			Name:    "serve",
+			Handler: cli.MakeServeHTTP(mux),
+		},
+	},
+}
+```
+
+`cli.MakeServeHTTP` uses the built-in [`cli.ServeHTTPArgs`](./serve_http.go) type, which gives the command an `--addr` flag with a default bind address.
+
+See [12-http](./cmd/cligen/testdata/12-http).
+
 ### `Lookup`
 
 `Lookup` rewrites raw string values before built-in parsing runs.
@@ -465,6 +493,8 @@ When you generate with `--provider aws`, `cligen` installs a resolver under the 
 ./app --db-url @aws:ssm:/my-app/db-url
 ./app --api-key @aws:secret:my-app/api-key
 ```
+
+Provider-generated lookup hooks are installed on every command in the generated tree, so subcommands get the same behavior as the root command.
 
 See [11-aws](./cmd/cligen/testdata/11-aws).
 
@@ -565,6 +595,67 @@ If your CLI already defines its own `version` command, that one is kept.
 
 See [01-minimal](./cmd/cligen/testdata/01-minimal).
 
+## Help templates
+
+Help output is rendered by `cli.Help`, which uses the nearest `Renderer` in the matched command path.
+If no command defines one, it calls `cli.DefaultRenderer`.
+The default renderer is `cli.TemplateHelp`, which renders with Go's `text/template`.
+
+The built-in template is exported as `cli.DefaultTemplate`, and you can override it per command with `Template`. If a command does not set `Template`, it reuses the nearest parent template; if no parent defines one, `cli.DefaultTemplate` is used.
+
+Templates receive:
+
+- `.Usage` for the rendered usage line
+- `.Command` for the current command definition
+- `.Commands` for the matched command path
+- `.Current` for the current command's arguments
+- `.Sections` for the argument sections from leaf to root
+
+Argument sections expose `.Command`, `.Current`, `.Global`, `.Args`, `.Positionals`, and `.Options`. Arguments expose `.Name`, `.Type`, `.Help`, `.Default`, `.Defaults`, `.Choices`, `.Labels`, `.Option`, and `.Arg` for the original argument definition.
+
+```go
+const serveTemplate = `{{define "argDetail"}}{{.Help}} ({{.Type}}{{if .Default}}, default: {{.Default}}{{else if .Defaults}}, default: {{range $i, $default := .Defaults}}{{if $i}} | {{end}}{{$default}}{{end}}{{end}}{{if .Choices}}, choices: {{range $i, $choice := .Choices}}{{if $i}}, {{end}}{{$choice}}{{end}}{{end}}{{if .Labels}}, labels: {{range $i, $label := .Labels}}{{if $i}}, {{end}}{{$label}}{{end}}{{end}}){{end}}{{.Usage}}{{if .Command.Help}}
+
+{{.Command.Help}}{{end}}{{if .Current.Options}}
+
+Options:
+{{range $i, $arg := .Current.Options}}{{if $i}}{{"\n"}}{{end}}{{printf "  --%-14s " .Name}}{{template "argDetail" .}}{{end}}{{end}}
+
+Routes:
+  GET /healthz
+  GET /readyz
+`
+
+var CLI = cli.Command{
+	Commands: []*cli.Command{
+		{
+			Name:     "serve",
+			Help:     "Run the HTTP server",
+			Template: serveTemplate,
+			Handler:  cli.MakeServeHTTP(Mux),
+		},
+	},
+}
+```
+
+See [12-http](./cmd/cligen/testdata/12-http).
+
+For complete control, replace the default renderer or set one on a command:
+
+```go
+func init() {
+	cli.DefaultRenderer = func(cmds []*cli.Command) string {
+		return "custom help\n"
+	}
+}
+
+var CLI = cli.Command{
+	Renderer: func(cmds []*cli.Command) string {
+		return cli.TemplateHelp(cmds)
+	},
+}
+```
+
 ## Example suite
 
 The examples under [cmd/cligen/testdata](./cmd/cligen/testdata) are also golden tests.
@@ -583,6 +674,7 @@ Their checked-in `main.cli.go` files must match freshly generated output.
 | [09-percentile](./cmd/cligen/testdata/09-percentile) | Slice flags, slice defaults, numeric parsing |
 | [10-sync](./cmd/cligen/testdata/10-sync) | Rich path validation across many path labels |
 | [11-aws](./cmd/cligen/testdata/11-aws) | AWS provider, S3-backed readers |
+| [12-http](./cmd/cligen/testdata/12-http) | Expression-based `Handler` hook with built-in HTTP serving |
 
 Run the end-to-end example suite with:
 
