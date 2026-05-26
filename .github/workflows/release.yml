@@ -1,0 +1,22 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - v*
+
+permissions:
+  contents: write
+
+jobs:
+  tag-submodules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Create cmd/cligen tag
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          git tag -f "cmd/cligen/${VERSION}"
+          git push -f origin "cmd/cligen/${VERSION}"

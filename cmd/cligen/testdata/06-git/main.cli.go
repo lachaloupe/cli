@@ -57,6 +57,10 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						s.Signoff = p.Value.(bool)
 					}
 
+					if p := cmd.Get("scope"); p != nil && p.Value != nil {
+						s.Scope = p.Value.(string)
+					}
+
 					if p := cmd.Get("template"); p != nil && p.Value != nil {
 						s.Template = p.Value.(string)
 					}
@@ -120,12 +124,22 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 							"$GIT_MESSAGE",
 							"@COMMIT_EDITMSG",
 						},
+						DefaultsOptional: []bool{true, false},
 					},
 					{
 						Name:    "signoff",
 						Type:    "bool",
 						Aliases: []string{"s"},
 						Help:    "Add a Signed-off-by trailer.",
+					},
+					{
+						Name: "scope",
+						Type: "string",
+						Help: "Prefix for the commit scope.",
+						Defaults: []string{
+							"$GIT_SCOPE/commit",
+						},
+						DefaultsOptional: []bool{true},
 					},
 					{
 						Name: "template",

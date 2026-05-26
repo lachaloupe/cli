@@ -184,27 +184,36 @@ func (c *Command) parseArgs(ctx context.Context, args []string) ([]string, *Comm
 }
 
 func (c *Command) applyDefault(ctx context.Context, arg *Arg) error {
-	defaults := append([]string{arg.Default}, arg.Defaults...)
+	defaults := arg.Defaults
+	optional := arg.DefaultsOptional
+
+	if arg.Default != "" {
+		defaults = append([]string{arg.Default}, defaults...)
+		optional = append([]bool{false}, optional...)
+	}
 
 	if len(defaults) == 0 {
 		return nil
 	}
 
 	value := ""
-	for _, text := range defaults {
+	for i, text := range defaults {
+		isOptional := i < len(optional) && optional[i]
 		skip := false
 		value = os.Expand(text, func(name string) string {
-			if value, ok := os.LookupEnv(name); ok && value != "" {
-				return value
+			v, ok := os.LookupEnv(name)
+			if isOptional && (!ok || v == "") {
+				skip = true
 			}
-
-			skip = true
-			return ""
+			return v
 		})
 
-		if !skip && value != "" {
-			break
+		if skip {
+			value = ""
+			continue
 		}
+
+		break
 	}
 
 	if strings.TrimSpace(value) == "" {

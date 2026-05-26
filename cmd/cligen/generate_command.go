@@ -98,13 +98,39 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) error {
 			switch len(arg.Defaults) {
 			case 0:
 			case 1:
-				fmt.Fprintf(w, "Default: %q,\n", arg.Defaults[0])
+				if arg.DefaultsOptional[0] {
+					fmt.Fprintln(w, "Defaults: []string{")
+					fmt.Fprintf(w, "%q,\n", arg.Defaults[0])
+					fmt.Fprintln(w, "},")
+					fmt.Fprintln(w, "DefaultsOptional: []bool{true},")
+				} else {
+					fmt.Fprintf(w, "Default: %q,\n", arg.Defaults[0])
+				}
 			default:
 				fmt.Fprintln(w, "Defaults: []string{")
 				for _, s := range arg.Defaults {
 					fmt.Fprintf(w, "%q,\n", s)
 				}
 				fmt.Fprintln(w, "},")
+
+				hasOptional := false
+				for _, l := range arg.DefaultsOptional {
+					if l {
+						hasOptional = true
+						break
+					}
+				}
+
+				if hasOptional {
+					fmt.Fprintf(w, "DefaultsOptional: []bool{")
+					for i, l := range arg.DefaultsOptional {
+						if i > 0 {
+							fmt.Fprint(w, ", ")
+						}
+						fmt.Fprintf(w, "%t", l)
+					}
+					fmt.Fprintln(w, "},")
+				}
 			}
 
 			if len(arg.Labels) != 0 {

@@ -85,13 +85,17 @@ type CommitArgs struct {
 
 	// Use the given message as the commit message.
 	//cli:alias=m
-	//cli:default=$GIT_MESSAGE
+	//cli:default?=$GIT_MESSAGE
 	//cli:default=@COMMIT_EDITMSG
 	Message string
 
 	// Add a Signed-off-by trailer.
 	//cli:alias=s
 	Signoff bool
+
+	// Prefix for the commit scope.
+	//cli:default?=$GIT_SCOPE/commit
+	Scope string
 
 	// Use this template file when preparing the message.
 	//cli:path=exists
@@ -113,13 +117,14 @@ func RunCommit(ctx context.Context, args CommitArgs) error {
 	}
 
 	fmt.Printf(
-		"commit all=%t amend=%t cleanup=%s author=%s message=%s signoff=%t template=%s paths=%s\n",
+		"commit all=%t amend=%t cleanup=%s author=%s message=%s signoff=%t scope=%s template=%s paths=%s\n",
 		args.All,
 		args.Amend,
 		args.Cleanup,
 		author,
 		strings.TrimSpace(args.Message),
 		args.Signoff,
+		args.Scope,
 		args.Template,
 		strings.Join(args.Paths, ","),
 	)

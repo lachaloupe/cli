@@ -13,10 +13,10 @@ Handlers and subcommands can live in the same package as the root command or in 
 
 ```bash
 # runtime dependency used by the generated CLI
-go get github.com/lachaloupe/cli@v0.1.1
+go get github.com/lachaloupe/cli@v0.1.3
 
 # tool-only dependency used by go generate
-go get -tool github.com/lachaloupe/cli/cmd/cligen@v0.1.1
+go get -tool github.com/lachaloupe/cli/cmd/cligen@v0.1.3
 ```
 
 ## Quick start
@@ -151,6 +151,7 @@ These directives shape the generated CLI.
 | `//cli:required` | Require the argument to be present. |
 | `//cli:alias=x` | Add a short or alternate name. On command handlers, it adds a command alias. |
 | `//cli:default=value` | Set a default value. Multiple defaults are allowed and are tried in order. |
+| `//cli:default?=value` | Optional default. Like `//cli:default=` but skips when any referenced environment variable is unset or empty. |
 | `//cli:enum` | Discover enum choices from `Strings() []string`. |
 | `//cli:enum=value` | Add an allowed enum choice. |
 | `//cli:path=...` | Apply path validation to `string` and `[]string` fields. |
@@ -336,6 +337,23 @@ If `XDG_DATA_HOME` is set and not empty, it wins.
 Otherwise `HOME` is tried next.
 If neither expands to a non-empty value, no default is applied.
 
+### Strict vs optional expansion
+
+`//cli:default=` is strict: a default is always used regardless of whether referenced environment variables are empty or unset.
+
+`//cli:default?=` is optional: a default is skipped when any referenced environment variable is unset or empty.
+
+```go
+// Strict: always used. Produces "/commit" even when GIT_SCOPE is empty.
+//cli:default=$GIT_SCOPE/commit
+
+// Optional: skipped when GIT_SCOPE is unset or empty.
+//cli:default?=$GIT_SCOPE/commit
+```
+
+Use strict defaults when the value should always apply.
+Use optional defaults when a missing environment variable means the default should be skipped in favor of the next one.
+
 Slice defaults use CSV syntax:
 
 ```go
@@ -367,7 +385,7 @@ By default:
 - `//cli:default=$NAME` expands an environment variable
 
 ```go
-//cli:default=$GIT_MESSAGE
+//cli:default?=$GIT_MESSAGE
 //cli:default=@COMMIT_EDITMSG
 Message string
 ```

@@ -69,15 +69,16 @@ type Command struct {
 }
 
 type Arg struct {
-	Name       string
-	Flag       string
-	Aliases    []string
-	Type       string
-	Help       string
-	Doc        string
-	Defaults   []string
-	Labels     map[string][]string
-	Choices    []string
+	Name            string
+	Flag            string
+	Aliases         []string
+	Type            string
+	Help            string
+	Doc             string
+	Defaults        []string
+	DefaultsOptional []bool
+	Labels          map[string][]string
+	Choices         []string
 	Directives []string
 	LookupEnum bool
 	Validate   string
@@ -199,8 +200,15 @@ func (c *Command) Process() error {
 				continue
 			}
 
+			if value, ok := strings.CutPrefix(d, "default?="); ok {
+				arg.Defaults = append(arg.Defaults, value)
+				arg.DefaultsOptional = append(arg.DefaultsOptional, true)
+				continue
+			}
+
 			if value, ok := strings.CutPrefix(d, "default="); ok {
 				arg.Defaults = append(arg.Defaults, value)
+				arg.DefaultsOptional = append(arg.DefaultsOptional, false)
 				continue
 			}
 

@@ -453,7 +453,7 @@ func TestUsingExamples(t *testing.T) {
 			env: []string{
 				"GIT_MESSAGE=",
 			},
-			expected: "commit all=false amend=false cleanup=strip author= message=chore: bootstrap repository signoff=false template= paths=\n",
+			expected: "commit all=false amend=false cleanup=strip author= message=chore: bootstrap repository signoff=false scope= template= paths=\n",
 		},
 		{
 			name:   "commit-help",
@@ -467,7 +467,16 @@ func TestUsingExamples(t *testing.T) {
 			env: []string{
 				"GIT_MESSAGE=feat: ship the docs",
 			},
-			expected: "commit all=true amend=false cleanup=strip author= message=feat: ship the docs signoff=true template= paths=README.md\n",
+			expected: "commit all=true amend=false cleanup=strip author= message=feat: ship the docs signoff=true scope= template= paths=README.md\n",
+		},
+		{
+			name:   "commit-optional-scope",
+			binary: "06-git",
+			args:   []string{"commit", "-m", "test"},
+			env: []string{
+				"GIT_SCOPE=feat",
+			},
+			expected: "commit all=false amend=false cleanup=strip author= message=test signoff=false scope=feat/commit template= paths=\n",
 		},
 		{
 			name:     "bad-cleanup",
@@ -480,7 +489,7 @@ func TestUsingExamples(t *testing.T) {
 			name:     "commit-literal-at",
 			binary:   "06-git",
 			args:     []string{"commit", "-m", "@@feat: add release notes"},
-			expected: "commit all=false amend=false cleanup=strip author= message=@feat: add release notes signoff=false template= paths=\n",
+			expected: "commit all=false amend=false cleanup=strip author= message=@feat: add release notes signoff=false scope= template= paths=\n",
 		},
 		{
 			name:     "remote-add",
@@ -513,7 +522,7 @@ func TestUsingExamples(t *testing.T) {
 			name:     "template-clean-backtrack",
 			binary:   "06-git",
 			args:     []string{"commit", "--template", cleanTemplate, "-m", "template check"},
-			expected: "commit all=false amend=false cleanup=strip author= message=template check signoff=false template=" + cleanTemplate + " paths=\n",
+			expected: "commit all=false amend=false cleanup=strip author= message=template check signoff=false scope= template=" + cleanTemplate + " paths=\n",
 		},
 		{
 			name:     "copy",

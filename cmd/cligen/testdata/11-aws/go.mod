@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.99.1
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.6
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.68.5
-	github.com/lachaloupe/cli v0.1.0
+	github.com/lachaloupe/cli v0.1.3
 )
 
 require (
@@ -31,7 +31,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.20 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.0 // indirect
 	github.com/aws/smithy-go v1.25.0 // indirect
-	github.com/lachaloupe/cli/cmd/cligen v0.0.0-20260421224956-bf1219ff76b3 // indirect
+	github.com/lachaloupe/cli/cmd/cligen v0.1.3 // indirect
 	golang.org/x/mod v0.34.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/tools v0.43.0 // indirect

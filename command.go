@@ -45,19 +45,20 @@ type Command struct {
 
 // Arg describes one command-line argument.
 type Arg struct {
-	Name       string
-	Aliases    []string
-	Type       string
-	Help       string
-	Default    string
-	Defaults   []string
-	Labels     map[string][]string
-	Choices    []string
-	Required   bool
-	Positional int
-	Parse      func(string) (any, error)
-	Validate   func(*Arg, string) error
-	Value      any
+	Name             string
+	Aliases          []string
+	Type             string
+	Help             string
+	Default          string
+	Defaults         []string
+	DefaultsOptional []bool
+	Labels           map[string][]string
+	Choices          []string
+	Required         bool
+	Positional       int
+	Parse            func(string) (any, error)
+	Validate         func(*Arg, string) error
+	Value            any
 }
 
 // EnumChoices returns the set of allowed enum strings for a value, plus any
