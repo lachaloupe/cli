@@ -68,9 +68,10 @@ func (c *Command) AddBuiltins() {
 }
 
 // RunVersion prints the configured CLI version.
-func RunVersion(context.Context) error {
-	fmt.Printf("%s %s/%s\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
-	fmt.Println(Version)
+func RunVersion(ctx context.Context) error {
+	w := Stdout(ctx)
+	fmt.Fprintf(w, "%s %s/%s\n", runtime.Version(), runtime.GOOS, runtime.GOARCH)
+	fmt.Fprintln(w, Version)
 	return nil
 }
 
@@ -90,13 +91,17 @@ func (c *Command) Main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if c.Context != nil {
+		ctx = c.Context(ctx)
+	}
+
 	if cmds, err := c.Run(ctx, os.Args[1:]); err != nil {
 		if err != ErrHelp {
-			fmt.Fprintf(os.Stderr, "error: %s\n", err)
+			fmt.Fprintf(Stderr(ctx), "error: %s\n", err)
 			os.Exit(1)
 		}
 
-		fmt.Fprint(os.Stderr, Help(cmds))
+		fmt.Fprint(Stderr(ctx), Help(cmds))
 	}
 }
 

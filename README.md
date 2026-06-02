@@ -317,6 +317,29 @@ Use the path for the command whose parsed args you want to access.
 
 See [03-commands](./cmd/cligen/testdata/03-commands).
 
+## Standard IO
+
+Functions `cli.Stdout`, `cli.Stderr`, and `cli.Stdin` get the standard IO streams from context.
+When no value is set, they fall back to `os.Stdout`, `os.Stderr`, and `os.Stdin`.
+
+```go
+func Run(ctx context.Context, args Args) error {
+	w := cli.Stdout(ctx)
+	fmt.Fprintln(w, "hello")
+	return nil
+}
+```
+
+In tests, override them to capture output:
+
+```go
+var out bytes.Buffer
+ctx = cli.WithStdout(ctx, &out)
+cmds, err := cmd.Run(ctx, []string{"--name", "alice"})
+```
+
+See [08-head](./cmd/cligen/testdata/08-head).
+
 ## Defaults
 
 Defaults live next to the field.
@@ -450,9 +473,34 @@ Hook values may be plain function names, function literals, or expressions that 
 
 | Hook | Purpose |
 | --- | --- |
+| `Context` | Transform the context before parsing and handler execution. |
 | `New` | Build the initial args value before defaults and user input are applied. |
 | `Lookup` | Rewrite raw string values before built-in resolution and parsing. |
 | `Open` | Rewrite raw values for `io.Reader` fields before file or URL resolution. |
+
+### `Context`
+
+`Context` transforms the context before parsing runs.
+Use it to attach values that must be available during the entire command lifecycle, including when errors happen before a handler is called.
+
+```go
+var CLI = cli.Command{
+	Context: func(ctx context.Context) context.Context {
+		h := slog.NewTextHandler(cli.Stderr(ctx), nil)
+		return WithLogger(ctx, slog.New(h))
+	},
+	Commands: []*cli.Command{
+		{Name: "login", Handler: RunLogin},
+	},
+}
+
+func RunLogin(ctx context.Context, args LoginArgs) error {
+	Logger(ctx).Info("login", "user", args.User)
+	return nil
+}
+```
+
+See [03-commands](./cmd/cligen/testdata/03-commands).
 
 ### `New`
 
@@ -683,12 +731,12 @@ Their checked-in `main.cli.go` files must match freshly generated output.
 | --- | --- |
 | [01-minimal](./cmd/cligen/testdata/01-minimal) | Smallest generated CLI, help text, built-in version command |
 | [02-simple](./cmd/cligen/testdata/02-simple) | Positional arguments, required values, aliases, defaults |
-| [03-commands](./cmd/cligen/testdata/03-commands) | Subcommands, command aliases, handlers with and without args |
+| [03-commands](./cmd/cligen/testdata/03-commands) | Subcommands, command aliases, `Context` hook with `slog` |
 | [04-docker](./cmd/cligen/testdata/04-docker) | Larger command tree, inherited root flags, fixed and trailing positionals |
 | [05-curl](./cmd/cligen/testdata/05-curl) | Native type parsing, durations, URLs, path validation |
 | [06-git](./cmd/cligen/testdata/06-git) | Value resolution from env and files, command nesting |
 | [07-cp](./cmd/cligen/testdata/07-cp) | Path directives, globs, relative and absolute path constraints |
-| [08-head](./cmd/cligen/testdata/08-head) | `New`, `io.Reader`, stdin defaults |
+| [08-head](./cmd/cligen/testdata/08-head) | `New`, `io.Reader`, `cli.Stdout`, stdin defaults |
 | [09-percentile](./cmd/cligen/testdata/09-percentile) | Slice flags, slice defaults, numeric parsing |
 | [10-sync](./cmd/cligen/testdata/10-sync) | Rich path validation across many path labels |
 | [11-aws](./cmd/cligen/testdata/11-aws) | AWS provider, S3-backed readers |

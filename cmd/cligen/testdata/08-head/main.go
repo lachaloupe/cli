@@ -50,12 +50,14 @@ type Args struct {
 
 // RunHead prints the first part of files.
 func RunHead(ctx context.Context, args Args) error {
+	w := cli.Stdout(ctx)
+
 	showHeaders := args.Verbose || (!args.Quiet && len(args.Files) > 1)
 
 	for i, file := range args.Files {
 		if showHeaders {
 			if i > 0 {
-				fmt.Println()
+				fmt.Fprintln(w)
 			}
 
 			name := "-"
@@ -63,20 +65,23 @@ func RunHead(ctx context.Context, args Args) error {
 				name = f.Name()
 			}
 
-			fmt.Printf("==> %s <==\n", name)
+			fmt.Fprintf(w, "==> %s <==\n", name)
 		}
 
 		if args.Bytes > 0 {
-			if _, err := io.CopyN(os.Stdout, file, int64(args.Bytes)); err != nil && !errors.Is(err, io.EOF) {
+			if _, err := io.CopyN(w, file, int64(args.Bytes)); err != nil && !errors.Is(err, io.EOF) {
 				return err
 			}
+
 			continue
 		}
 
 		scanner := bufio.NewScanner(file)
+
 		for n := uint(0); n < args.Lines && scanner.Scan(); n++ {
-			fmt.Println(scanner.Text())
+			fmt.Fprintln(w, scanner.Text())
 		}
+
 		if err := scanner.Err(); err != nil {
 			return err
 		}

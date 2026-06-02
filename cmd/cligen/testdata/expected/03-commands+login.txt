@@ -1,1 +1,1 @@
-login user=alice password=secret
+level=INFO msg=login user=alice password=secret

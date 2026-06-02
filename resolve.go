@@ -54,7 +54,7 @@ func (c *Command) openReader(ctx context.Context, arg *Arg, s string) (io.Reader
 	}
 
 	if s == "-" {
-		return os.Stdin, nil
+		return Stdin(ctx), nil
 	}
 
 	if u, err := url.Parse(s); err == nil && u.Scheme != "" {

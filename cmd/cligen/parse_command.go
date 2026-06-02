@@ -59,7 +59,7 @@ func (gen *Generator) parseCommand(cmd *Command, lit *ast.CompositeLit) error {
 			if err := gen.parseSubcommands(cmd, kv.Value); err != nil {
 				return err
 			}
-		case "Handler", "Renderer", "New", "Lookup", "Open":
+		case "Handler", "Renderer", "New", "Lookup", "Open", "Context":
 			if gen.TypesInfo != nil {
 				ast.Inspect(kv.Value, func(node ast.Node) bool {
 					id, ok := node.(*ast.Ident)

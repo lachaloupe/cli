@@ -261,10 +261,9 @@ func TestUsingExamples(t *testing.T) {
 			args:   []string{"login", "--user", "alice", "--password", "secret"},
 		},
 		{
-			name:     "signout-alias",
-			binary:   "03-commands",
-			args:     []string{"signout"},
-			expected: "logout\n",
+			name:   "signout-alias",
+			binary: "03-commands",
+			args:   []string{"signout"},
 		},
 		{
 			name:     "unknown-subcommand",

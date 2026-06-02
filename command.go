@@ -32,6 +32,7 @@ type Command struct {
 	Template string
 	Handler  any
 	New      any
+	Context  func(context.Context) context.Context
 	Renderer Renderer
 	Invoke   func(context.Context, *Command) (context.Context, error)
 	Args     []*Arg
