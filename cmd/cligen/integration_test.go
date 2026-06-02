@@ -294,10 +294,9 @@ func TestUsingExamples(t *testing.T) {
 			expected: "",
 		},
 		{
-			name:     "root-default-host",
-			binary:   "04-docker",
-			args:     nil,
-			expected: "docker api-version= config= debug=false host=unix:///var/run/docker.sock tls=false tlscacert=\n",
+			name:   "root-default-host",
+			binary: "04-docker",
+			args:   nil,
 		},
 		{
 			name:     "bad-creatable",

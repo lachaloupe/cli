@@ -75,6 +75,14 @@ func (gen *Generator) generateInvoke(w *strings.Builder, cmd *Command) error {
 	fmt.Fprintln(w, "return cmds, err")
 	fmt.Fprintln(w, "}")
 	fmt.Fprintln(w, "")
+
+	if len(cmd.Commands) > 0 {
+		fmt.Fprintln(w, "if last := cmds[len(cmds)-1]; len(last.Commands) > 0 {")
+		fmt.Fprintln(w, "return cmds, cli.ErrHelp")
+		fmt.Fprintln(w, "}")
+		fmt.Fprintln(w, "")
+	}
+
 	fmt.Fprintln(w, "for _, cmd := range cmds {")
 	fmt.Fprintln(w, "if cmd.Invoke == nil {")
 	fmt.Fprintln(w, "continue")

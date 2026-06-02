@@ -241,6 +241,10 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 		return cmds, err
 	}
 
+	if last := cmds[len(cmds)-1]; len(last.Commands) > 0 {
+		return cmds, cli.ErrHelp
+	}
+
 	for _, cmd := range cmds {
 		if cmd.Invoke == nil {
 			continue
