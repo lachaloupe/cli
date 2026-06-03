@@ -13,10 +13,10 @@ Handlers and subcommands can live in the same package as the root command or in 
 
 ```bash
 # runtime dependency used by the generated CLI
-go get github.com/lachaloupe/cli@v0.1.3
+go get github.com/lachaloupe/cli@v0.1.4
 
 # tool-only dependency used by go generate
-go get -tool github.com/lachaloupe/cli/cmd/cligen@v0.1.3
+go get -tool github.com/lachaloupe/cli/cmd/cligen@v0.1.4
 ```
 
 ## Quick start
