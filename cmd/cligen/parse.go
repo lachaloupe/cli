@@ -45,6 +45,7 @@ func Parse(filename string, providers []string) (*Generator, error) {
 			"context":                   "",
 			"github.com/lachaloupe/cli": "",
 		},
+		Package:       pkgs[0].Name,
 		PackagePath:   pkgs[0].PkgPath,
 		SourceImports: map[string]string{},
 		TypesInfo:     pkgs[0].TypesInfo,

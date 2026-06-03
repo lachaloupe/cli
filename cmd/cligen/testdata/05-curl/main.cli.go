@@ -118,36 +118,24 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Aliases: []string{"o"},
 				Help:    "Write output to this file.",
 				Labels: map[string][]string{
-					"path": []string{
-						"creatable",
+					"path": {
 						"clean",
 					},
 				},
-				Validate: func(arg *cli.Arg, s string) error {
-					if err := cli.PathValidate(arg, s); err != nil {
-						return err
-					}
-					return nil
-				},
+				Validate: cli.PathValidate,
 			},
 			{
 				Name: "cacert",
 				Type: "string",
 				Help: "Trust certificates signed only by this CA bundle.",
 				Labels: map[string][]string{
-					"path": []string{
+					"path": {
 						"exists",
 						"file",
-						"readable",
 						"clean",
 					},
 				},
-				Validate: func(arg *cli.Arg, s string) error {
-					if err := cli.PathValidate(arg, s); err != nil {
-						return err
-					}
-					return nil
-				},
+				Validate: cli.PathValidate,
 			},
 			{
 				Name: "proxy",

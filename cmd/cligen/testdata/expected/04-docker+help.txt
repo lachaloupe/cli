@@ -4,11 +4,11 @@ A self-sufficient runtime for containers
 
 Options:
   --api-version    Set the API version to use. (string)
-  --config         Location of client configuration files. (string, labels: path=creatable, path=clean)
+  --config         Location of client configuration files. (string, labels: path=clean)
   --[no-]debug     Enable debug mode. (bool, default: false)
   --host           Daemon socket to connect to. ([]string, default: unix:///var/run/docker.sock)
   --[no-]tls       Use TLS. (bool, default: false)
-  --tlscacert      Trust certs signed only by this CA. (string, labels: path=file, path=creatable, path=clean)
+  --tlscacert      Trust certs signed only by this CA. (string, labels: path=file, path=clean)
 
 Subcommands:
   image            Manage images

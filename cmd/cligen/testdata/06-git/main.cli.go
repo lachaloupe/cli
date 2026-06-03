@@ -103,12 +103,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 							var v CleanupMode
 							return &v
 						}()),
-						Validate: func(arg *cli.Arg, s string) error {
-							if err := cli.EnumValidate(arg, s); err != nil {
-								return err
-							}
-							return nil
-						},
+						Validate: cli.EnumValidate,
 					},
 					{
 						Name: "author",
@@ -146,19 +141,13 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						Type: "string",
 						Help: "Use this template file when preparing the message.",
 						Labels: map[string][]string{
-							"path": []string{
+							"path": {
 								"exists",
 								"file",
-								"readable",
 								"clean",
 							},
 						},
-						Validate: func(arg *cli.Arg, s string) error {
-							if err := cli.PathValidate(arg, s); err != nil {
-								return err
-							}
-							return nil
-						},
+						Validate: cli.PathValidate,
 					},
 					{
 						Name:       "paths",

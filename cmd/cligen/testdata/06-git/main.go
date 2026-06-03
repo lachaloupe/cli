@@ -100,7 +100,6 @@ type CommitArgs struct {
 	// Use this template file when preparing the message.
 	//cli:path=exists
 	//cli:path=file
-	//cli:path=readable
 	//cli:path=clean
 	Template string
 

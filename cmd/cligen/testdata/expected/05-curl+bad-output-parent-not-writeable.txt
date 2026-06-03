@@ -1,1 +1,0 @@
-error: invalid value for argument "output": "output" must have a writeable parent directory: permission denied

@@ -44,14 +44,12 @@ type Args struct {
 
 	// Write output to this file.
 	//cli:alias=o
-	//cli:path=creatable
 	//cli:path=clean
 	Output string
 
 	// Trust certificates signed only by this CA bundle.
 	//cli:path=exists
 	//cli:path=file
-	//cli:path=readable
 	//cli:path=clean
 	Cacert string
 

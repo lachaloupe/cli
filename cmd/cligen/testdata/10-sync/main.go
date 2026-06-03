@@ -37,7 +37,7 @@ type Args struct {
 	Scratch string
 
 	// Existing state file to update while the sync runs.
-	//cli:path=writeable
+	//cli:path=exists
 	State string
 
 	// Helper program used to post-process copied files.

@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"fmt"
-	"os"
 )
 
 var (
@@ -14,23 +13,18 @@ var (
 	ErrMissingValue    = errors.New("missing flag value")
 	ErrUnexpectedArg   = errors.New("unexpected argument")
 
-	ErrPathAbs          = errors.New("path must be absolute")
-	ErrPathRel          = errors.New("path must be relative")
-	ErrPathClean        = errors.New("path must not escape its root")
-	ErrPathGlob         = errors.New("path must be a valid glob")
-	ErrPathExt          = errors.New("path must use an allowed extension")
-	ErrPathExists       = errors.New("path must exist")
-	ErrPathDir          = errors.New("path must be a directory")
-	ErrPathFile         = errors.New("path must be a file")
-	ErrPathEmpty        = errors.New("path must be an empty directory")
-	ErrPathParentExists = errors.New("path parent must exist")
-	ErrPathParentDir    = errors.New("path parent must be a directory")
-	ErrPathParentWrite  = errors.New("path parent must be writeable")
-	ErrPathReadable     = errors.New("path must be readable")
-	ErrPathWriteable    = errors.New("path must be writeable")
-	ErrPathExecutable   = errors.New("path must be executable")
-	ErrPathNotExists    = errors.New("path must not exist")
-	ErrPathSymlink      = errors.New("path must be a symlink")
+	ErrPathAbs        = errors.New("path must be absolute")
+	ErrPathRel        = errors.New("path must be relative")
+	ErrPathClean      = errors.New("path must not escape its root")
+	ErrPathGlob       = errors.New("path must be a valid glob")
+	ErrPathExt        = errors.New("path must use an allowed extension")
+	ErrPathExists     = errors.New("path must exist")
+	ErrPathDir        = errors.New("path must be a directory")
+	ErrPathFile       = errors.New("path must be a file")
+	ErrPathEmpty      = errors.New("path must be an empty directory")
+	ErrPathExecutable = errors.New("path must be executable")
+	ErrPathNotExists  = errors.New("path must not exist")
+	ErrPathSymlink    = errors.New("path must be a symlink")
 )
 
 // ParseError reports why parsing failed and, when available, which input caused it.
@@ -85,18 +79,6 @@ type PathError struct {
 }
 
 func (err *PathError) Error() string {
-	detail := func() string {
-		if err.Err == nil {
-			return ""
-		}
-
-		if errors.Is(err.Err, os.ErrPermission) {
-			return "permission denied"
-		}
-
-		return err.Err.Error()
-	}
-
 	switch err.Kind {
 	case ErrPathAbs:
 		return fmt.Sprintf("%q must reference an absolute path", err.Arg)
@@ -116,16 +98,6 @@ func (err *PathError) Error() string {
 		return fmt.Sprintf("%q must reference a file", err.Arg)
 	case ErrPathEmpty:
 		return fmt.Sprintf("%q must reference an empty directory", err.Arg)
-	case ErrPathParentExists:
-		return fmt.Sprintf("%q must have an existing parent directory", err.Arg)
-	case ErrPathParentDir:
-		return fmt.Sprintf("%q must have a directory parent", err.Arg)
-	case ErrPathParentWrite:
-		return fmt.Sprintf("%q must have a writeable parent directory: %s", err.Arg, detail())
-	case ErrPathReadable:
-		return fmt.Sprintf("%q must reference a readable path: %s", err.Arg, detail())
-	case ErrPathWriteable:
-		return fmt.Sprintf("%q must reference a writeable path: %s", err.Arg, detail())
 	case ErrPathExecutable:
 		return fmt.Sprintf("%q must reference an executable path", err.Arg)
 	case ErrPathNotExists:

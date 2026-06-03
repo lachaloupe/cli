@@ -69,17 +69,11 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Type: "string",
 				Help: "Location of client configuration files.",
 				Labels: map[string][]string{
-					"path": []string{
-						"creatable",
+					"path": {
 						"clean",
 					},
 				},
-				Validate: func(arg *cli.Arg, s string) error {
-					if err := cli.PathValidate(arg, s); err != nil {
-						return err
-					}
-					return nil
-				},
+				Validate: cli.PathValidate,
 			},
 			{
 				Name:    "debug",
@@ -104,18 +98,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Type: "string",
 				Help: "Trust certs signed only by this CA.",
 				Labels: map[string][]string{
-					"path": []string{
+					"path": {
 						"file",
-						"creatable",
 						"clean",
 					},
 				},
-				Validate: func(arg *cli.Arg, s string) error {
-					if err := cli.PathValidate(arg, s); err != nil {
-						return err
-					}
-					return nil
-				},
+				Validate: cli.PathValidate,
 			},
 		},
 		Commands: []*cli.Command{
@@ -517,18 +505,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 								Type: "[]string",
 								Help: "Read in a file of environment variables.",
 								Labels: map[string][]string{
-									"path": []string{
+									"path": {
 										"exists",
 										"file",
-										"readable",
 									},
 								},
-								Validate: func(arg *cli.Arg, s string) error {
-									if err := cli.PathValidate(arg, s); err != nil {
-										return err
-									}
-									return nil
-								},
+								Validate: cli.PathValidate,
 							},
 							{
 								Name:    "interactive",
@@ -562,12 +544,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 									"missing",
 									"never",
 								},
-								Validate: func(arg *cli.Arg, s string) error {
-									if err := cli.EnumValidate(arg, s); err != nil {
-										return err
-									}
-									return nil
-								},
+								Validate: cli.EnumValidate,
 							},
 							{
 								Name:    "tty",

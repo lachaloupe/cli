@@ -79,17 +79,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Type: "string",
 				Help: "Root directory containing the files to sync.",
 				Labels: map[string][]string{
-					"path": []string{
+					"path": {
 						"exists",
 						"dir",
 					},
 				},
-				Validate: func(arg *cli.Arg, s string) error {
-					if err := cli.PathValidate(arg, s); err != nil {
-						return err
-					}
-					return nil
-				},
+				Validate: cli.PathValidate,
 			},
 			{
 				Name: "workers",
@@ -111,82 +106,57 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Type: "string",
 				Help: "Empty scratch directory used while staging the release.",
 				Labels: map[string][]string{
-					"path": []string{
+					"path": {
 						"exists",
 						"dir",
 						"empty",
 					},
 				},
-				Validate: func(arg *cli.Arg, s string) error {
-					if err := cli.PathValidate(arg, s); err != nil {
-						return err
-					}
-					return nil
-				},
+				Validate: cli.PathValidate,
 			},
 			{
 				Name: "state",
 				Type: "string",
 				Help: "Existing state file to update while the sync runs.",
 				Labels: map[string][]string{
-					"path": []string{
-						"writeable",
+					"path": {
+						"exists",
 					},
 				},
-				Validate: func(arg *cli.Arg, s string) error {
-					if err := cli.PathValidate(arg, s); err != nil {
-						return err
-					}
-					return nil
-				},
+				Validate: cli.PathValidate,
 			},
 			{
 				Name: "helper",
 				Type: "string",
 				Help: "Helper program used to post-process copied files.",
 				Labels: map[string][]string{
-					"path": []string{
+					"path": {
 						"exec",
 					},
 				},
-				Validate: func(arg *cli.Arg, s string) error {
-					if err := cli.PathValidate(arg, s); err != nil {
-						return err
-					}
-					return nil
-				},
+				Validate: cli.PathValidate,
 			},
 			{
 				Name: "lock",
 				Type: "string",
 				Help: "Lock file path reserved for the next sync run.",
 				Labels: map[string][]string{
-					"path": []string{
+					"path": {
 						"not-exists",
 					},
 				},
-				Validate: func(arg *cli.Arg, s string) error {
-					if err := cli.PathValidate(arg, s); err != nil {
-						return err
-					}
-					return nil
-				},
+				Validate: cli.PathValidate,
 			},
 			{
 				Name: "current",
 				Type: "string",
 				Help: "Symlink pointing at the current release.",
 				Labels: map[string][]string{
-					"path": []string{
+					"path": {
 						"symlink",
 					},
 				},
-				Validate: func(arg *cli.Arg, s string) error {
-					if err := cli.PathValidate(arg, s); err != nil {
-						return err
-					}
-					return nil
-				},
+				Validate: cli.PathValidate,
 			},
 			{
 				Name:       "sources",

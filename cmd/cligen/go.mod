@@ -1,6 +1,6 @@
 module github.com/lachaloupe/cli/cmd/cligen
 
-go 1.26.2
+go 1.26.3
 
 require (
 	github.com/lachaloupe/cli v0.1.3

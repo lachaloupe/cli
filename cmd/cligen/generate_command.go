@@ -143,7 +143,7 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) error {
 
 				fmt.Fprintln(w, "Labels: map[string][]string{")
 				for _, key := range keys {
-					fmt.Fprintf(w, "%q: []string{\n", key)
+					fmt.Fprintf(w, "%q: {\n", key)
 					for _, value := range arg.Labels[key] {
 						fmt.Fprintf(w, "%q,\n", value)
 					}
@@ -177,7 +177,11 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) error {
 				validates = append(validates, arg.Validate)
 			}
 
-			if len(validates) != 0 {
+			switch len(validates) {
+			case 0:
+			case 1:
+				fmt.Fprintf(w, "Validate: %s,\n", validates[0])
+			default:
 				fmt.Fprintf(w, "Validate: func(arg *cli.Arg, s string) error {\n")
 				for _, validate := range validates {
 					fmt.Fprintf(w, "if err := %s(arg, s); err != nil {\n", validate)

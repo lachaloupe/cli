@@ -49,7 +49,6 @@ type RunArgs struct {
 	// Read in a file of environment variables.
 	//cli:path=exists
 	//cli:path=file
-	//cli:path=readable
 	EnvFile []string
 
 	// Keep STDIN open even if not attached.

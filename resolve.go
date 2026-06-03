@@ -8,7 +8,10 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 )
+
+var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 func (c *Command) lookupValue(ctx context.Context, arg *Arg, s string) (string, error) {
 	if c.Lookup != nil {
@@ -29,12 +32,12 @@ func (c *Command) lookupValue(ctx context.Context, arg *Arg, s string) (string, 
 
 	p := strings.TrimPrefix(s, "@")
 	if p == "" {
-		return "", fmt.Errorf("%s: empty file reference", arg.Name)
+		return "", fmt.Errorf("empty file reference")
 	}
 
 	body, err := os.ReadFile(p)
 	if err != nil {
-		return "", fmt.Errorf("%s: read %q: %w", arg.Name, p, err)
+		return "", err
 	}
 
 	return string(body), nil
@@ -62,16 +65,16 @@ func (c *Command) openReader(ctx context.Context, arg *Arg, s string) (io.Reader
 		case "http", "https":
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, s, nil)
 			if err != nil {
-				return nil, fmt.Errorf("%s: build GET %q: %w", arg.Name, s, err)
+				return nil, fmt.Errorf("build GET %q: %w", s, err)
 			}
 
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := httpClient.Do(req)
 			if err != nil {
-				return nil, fmt.Errorf("%s: GET %q: %w", arg.Name, s, err)
+				return nil, fmt.Errorf("GET %q: %w", s, err)
 			}
 			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 				defer resp.Body.Close()
-				return nil, fmt.Errorf("%s: GET %q: unexpected status %s", arg.Name, s, resp.Status)
+				return nil, fmt.Errorf("GET %q: unexpected status %s", s, resp.Status)
 			}
 
 			c.Cleanups = append(c.Cleanups, resp.Body.Close)
@@ -79,15 +82,15 @@ func (c *Command) openReader(ctx context.Context, arg *Arg, s string) (io.Reader
 		case "file":
 			path := u.Path
 			if path == "" {
-				return nil, fmt.Errorf("%s: empty file URI %q", arg.Name, s)
+				return nil, fmt.Errorf("empty file URI %q", s)
 			}
 			if u.Host != "" && u.Host != "localhost" {
-				return nil, fmt.Errorf("%s: unsupported file URI host %q", arg.Name, u.Host)
+				return nil, fmt.Errorf("unsupported file URI host %q", u.Host)
 			}
 
 			file, err := os.Open(path)
 			if err != nil {
-				return nil, fmt.Errorf("%s: open %q: %w", arg.Name, path, err)
+				return nil, err
 			}
 
 			c.Cleanups = append(c.Cleanups, file.Close)
@@ -97,7 +100,7 @@ func (c *Command) openReader(ctx context.Context, arg *Arg, s string) (io.Reader
 
 	file, err := os.Open(s)
 	if err != nil {
-		return nil, fmt.Errorf("%s: open %q: %w", arg.Name, s, err)
+		return nil, err
 	}
 
 	c.Cleanups = append(c.Cleanups, file.Close)

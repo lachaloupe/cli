@@ -74,10 +74,6 @@ func TestUsingExamples(t *testing.T) {
 	if err := os.WriteFile(syncHelperPlain, []byte("helper"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	syncStateReadOnly := filepath.Join(dir, "sync-readonly.state")
-	if err := os.WriteFile(syncStateReadOnly, []byte("state"), 0444); err != nil {
-		t.Fatal(err)
-	}
 	syncCurrentTarget := filepath.Join(dir, "release-2026-04-18")
 	if err := os.Mkdir(syncCurrentTarget, 0755); err != nil {
 		t.Fatal(err)
@@ -92,18 +88,6 @@ func TestUsingExamples(t *testing.T) {
 	}
 	syncLockTaken := filepath.Join(dir, "sync.lock")
 	if err := os.WriteFile(syncLockTaken, []byte("locked"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	outputParentFile := filepath.Join(dir, "output-parent")
-	if err := os.WriteFile(outputParentFile, []byte("parent"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	outputReadOnlyDir := filepath.Join(dir, "output-read-only")
-	if err := os.Mkdir(outputReadOnlyDir, 0555); err != nil {
-		t.Fatal(err)
-	}
-	unreadableCACert := filepath.Join(dir, "blocked.pem")
-	if err := os.WriteFile(unreadableCACert, []byte("cert"), 0000); err != nil {
 		t.Fatal(err)
 	}
 	cleanParent := filepath.Join(dir, "clean-parent")
@@ -299,13 +283,6 @@ func TestUsingExamples(t *testing.T) {
 			args:   nil,
 		},
 		{
-			name:     "bad-creatable",
-			binary:   "04-docker",
-			args:     []string{"--config", "missing/child"},
-			status:   1,
-			expected: "error: invalid value for argument \"config\": \"config\" must have an existing parent directory\n",
-		},
-		{
 			name:     "bad-network-gateway-mac",
 			binary:   "04-docker",
 			args:     []string{"network", "create", "--gateway-mac", "not-a-mac", "demo-net"},
@@ -422,27 +399,6 @@ func TestUsingExamples(t *testing.T) {
 			args:     []string{"--cacert", ".", "https://example.com"},
 			status:   1,
 			expected: "error: invalid value for argument \"cacert\": \"cacert\" must reference a file\n",
-		},
-		{
-			name:     "bad-output-parent-not-dir",
-			binary:   "05-curl",
-			args:     []string{"--output", filepath.Join(outputParentFile, "result.txt"), "https://example.com"},
-			status:   1,
-			expected: "error: invalid value for argument \"output\": \"output\" must have a directory parent\n",
-		},
-		{
-			name:   "bad-output-parent-not-writeable",
-			binary: "05-curl",
-			args:   []string{"--output", filepath.Join(outputReadOnlyDir, "result.txt"), "https://example.com"},
-			status: 1,
-			skip:   runtime.GOOS == "windows",
-		},
-		{
-			name:   "bad-cacert-not-readable",
-			binary: "05-curl",
-			args:   []string{"--cacert", unreadableCACert, "https://example.com"},
-			status: 1,
-			skip:   runtime.GOOS == "windows",
 		},
 		{
 			name:   "commit-defaults",
@@ -693,13 +649,6 @@ func TestUsingExamples(t *testing.T) {
 			args:     []string{"--worktree", syncWorktree, "--scratch", syncScratch, "--state", filepath.Join(dir, "missing.state"), "--helper", syncHelper, "--lock", filepath.Join(dir, "next-sync.lock"), "--current", syncCurrent, "assets/*.txt", "public/"},
 			status:   1,
 			expected: "error: invalid value for argument \"state\": \"state\" must reference an existing path\n",
-		},
-		{
-			name:   "bad-state-not-writeable",
-			binary: "10-sync",
-			args:   []string{"--worktree", syncWorktree, "--scratch", syncScratch, "--state", syncStateReadOnly, "--helper", syncHelper, "--lock", filepath.Join(dir, "next-sync.lock"), "--current", syncCurrent, "assets/*.txt", "public/"},
-			status: 1,
-			skip:   runtime.GOOS == "windows",
 		},
 		{
 			name:     "bad-helper-missing",

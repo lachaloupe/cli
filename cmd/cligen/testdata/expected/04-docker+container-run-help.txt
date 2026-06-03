@@ -7,7 +7,7 @@ Options:
   command          Command and arguments to execute. ([]string)
   --[no-]detach    Run container in background and print container ID. (bool, default: false)
   --env            Set environment variables. ([]string)
-  --env-file       Read in a file of environment variables. ([]string, labels: path=exists, path=file, path=readable)
+  --env-file       Read in a file of environment variables. ([]string, labels: path=exists, path=file)
   --[no-]interactive Keep STDIN open even if not attached. (bool, default: false)
   --name           Assign a name to the container. (string)
   --publish        Publish a container's port to the host. ([]string)
@@ -19,8 +19,8 @@ Options:
 
 Options (global):
   --api-version    Set the API version to use. (string)
-  --config         Location of client configuration files. (string, labels: path=creatable, path=clean)
+  --config         Location of client configuration files. (string, labels: path=clean)
   --[no-]debug     Enable debug mode. (bool, default: false)
   --host           Daemon socket to connect to. ([]string, default: unix:///var/run/docker.sock)
   --[no-]tls       Use TLS. (bool, default: false)
-  --tlscacert      Trust certs signed only by this CA. (string, labels: path=file, path=creatable, path=clean)
+  --tlscacert      Trust certs signed only by this CA. (string, labels: path=file, path=clean)

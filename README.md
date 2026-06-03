@@ -165,9 +165,6 @@ These directives shape the generated CLI.
 | `//cli:path=dir` | Path must be a directory. |
 | `//cli:path=file` | Path must be a regular file. |
 | `//cli:path=mkdir` | Create the directory before validation. |
-| `//cli:path=creatable` | Parent directory must exist and be writable. |
-| `//cli:path=readable` | Path must be readable. |
-| `//cli:path=writeable` | Path must be writable. |
 | `//cli:path=symlink` | Path must be a symlink. |
 | `//cli:path=abs` | Path must be absolute. |
 | `//cli:path=rel` | Path must be relative. |
@@ -652,7 +649,7 @@ Then:
 prints:
 
 ```text
-go1.26.2 darwin/arm64
+go1.26.3 darwin/arm64
 v1.2.3
 ```
 

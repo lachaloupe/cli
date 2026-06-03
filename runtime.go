@@ -95,7 +95,12 @@ func (c *Command) Main() {
 		ctx = c.Context(ctx)
 	}
 
-	if cmds, err := c.Run(ctx, os.Args[1:]); err != nil {
+	cmds, err := c.Run(ctx, os.Args[1:])
+	if err != nil {
+		for _, cmd := range cmds {
+			cmd.Cleanup()
+		}
+
 		if err != ErrHelp {
 			fmt.Fprintf(Stderr(ctx), "error: %s\n", err)
 			os.Exit(1)

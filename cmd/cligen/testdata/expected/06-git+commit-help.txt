@@ -11,4 +11,4 @@ Options:
   --message        Use the given message as the commit message. (string, default: $GIT_MESSAGE | @COMMIT_EDITMSG)
   --[no-]signoff   Add a Signed-off-by trailer. (bool, default: false)
   --scope          Prefix for the commit scope. (string, default: $GIT_SCOPE/commit)
-  --template       Use this template file when preparing the message. (string, labels: path=exists, path=file, path=readable, path=clean)
+  --template       Use this template file when preparing the message. (string, labels: path=exists, path=file, path=clean)

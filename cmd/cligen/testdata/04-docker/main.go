@@ -120,7 +120,6 @@ type DockerArgs struct {
 	ApiVersion string
 
 	// Location of client configuration files.
-	//cli:path=creatable
 	//cli:path=clean
 	Config string
 
@@ -138,7 +137,6 @@ type DockerArgs struct {
 
 	// Trust certs signed only by this CA.
 	//cli:path=file
-	//cli:path=creatable
 	//cli:path=clean
 	Tlscacert string
 }

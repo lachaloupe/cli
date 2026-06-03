@@ -1,6 +1,6 @@
 module example.com/testcli
 
-go 1.26.2
+go 1.26.3
 
 replace github.com/lachaloupe/cli => ../../../..
 

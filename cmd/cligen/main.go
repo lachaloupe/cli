@@ -40,6 +40,7 @@ type Generator struct {
 	Fset          *token.FileSet
 	Cmds          []*Command
 	Imports       map[string]string
+	Package       string
 	PackagePath   string
 	SourceImports map[string]string
 	TypesInfo     *types.Info
@@ -164,9 +165,19 @@ func (c *Command) Process() error {
 					}
 
 					w.WriteRune(unicode.ToLower(c))
+				case unicode.IsDigit(c):
+					if i > 0 && unicode.IsLetter(s[i-1]) && !unicode.IsUpper(s[i-1]) {
+						w.WriteByte('-')
+					}
+
+					w.WriteRune(c)
 				case c == '_' || c == '-':
 					w.WriteByte('-')
 				default:
+					if i > 0 && unicode.IsDigit(s[i-1]) {
+						w.WriteByte('-')
+					}
+
 					w.WriteRune(unicode.ToLower(c))
 				}
 			}
@@ -320,21 +331,15 @@ func applyPathDirective(cmd *Command, arg *Arg, value string) error {
 		case "mkdir":
 			return []string{"file", "not-exists", "glob", "symlink"}
 		case "not-exists":
-			return []string{"exists", "dir", "file", "empty", "readable", "writeable", "symlink", "exec", "mkdir"}
+			return []string{"exists", "dir", "file", "empty", "symlink", "exec", "mkdir"}
 		case "exists":
-			return []string{"not-exists", "glob"}
-		case "readable":
-			return []string{"not-exists", "glob"}
-		case "writeable":
 			return []string{"not-exists", "glob"}
 		case "symlink":
 			return []string{"not-exists", "mkdir", "glob"}
 		case "exec":
 			return []string{"not-exists", "glob"}
-		case "creatable":
-			return []string{"glob"}
 		case "glob":
-			return []string{"exists", "not-exists", "dir", "file", "empty", "mkdir", "creatable", "readable", "writeable", "symlink", "exec"}
+			return []string{"exists", "not-exists", "dir", "file", "empty", "mkdir", "symlink", "exec"}
 		case "abs":
 			return []string{"rel"}
 		case "rel":
@@ -349,7 +354,7 @@ func applyPathDirective(cmd *Command, arg *Arg, value string) error {
 	}
 
 	switch value {
-	case "exists", "not-exists", "dir", "file", "empty", "mkdir", "creatable", "readable", "writeable", "symlink", "abs", "rel", "exec", "clean", "glob":
+	case "exists", "not-exists", "dir", "file", "empty", "mkdir", "symlink", "abs", "rel", "exec", "clean", "glob":
 	default:
 		if !strings.HasPrefix(value, ".") {
 			return fmt.Errorf("%s: unsupported path directive %q for %q", cmd.Path, value, arg.Name)

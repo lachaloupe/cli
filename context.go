@@ -11,14 +11,26 @@ type stderrKey struct{}
 type stdinKey struct{}
 
 func WithStdout(ctx context.Context, w io.Writer) context.Context {
+	if w == nil {
+		panic("cli.WithStdout: nil writer")
+	}
+
 	return context.WithValue(ctx, stdoutKey{}, w)
 }
 
 func WithStderr(ctx context.Context, w io.Writer) context.Context {
+	if w == nil {
+		panic("cli.WithStderr: nil writer")
+	}
+
 	return context.WithValue(ctx, stderrKey{}, w)
 }
 
 func WithStdin(ctx context.Context, r io.Reader) context.Context {
+	if r == nil {
+		panic("cli.WithStdin: nil reader")
+	}
+
 	return context.WithValue(ctx, stdinKey{}, r)
 }
 

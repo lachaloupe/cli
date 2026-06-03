@@ -160,7 +160,7 @@ func TestFailures(t *testing.T) {
 			}
 
 			mod := "module example.com/cligenfail\n\n" +
-				"go 1.26.2\n\n" +
+				"go 1.26.3\n\n" +
 				"require github.com/lachaloupe/cli v0.0.0\n\n" +
 				"replace github.com/lachaloupe/cli => " + filepath.ToSlash(root) + "\n"
 

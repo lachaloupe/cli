@@ -87,34 +87,24 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Type: "string",
 				Help: "Write a JSON manifest describing the copy plan.",
 				Labels: map[string][]string{
-					"path": []string{
+					"path": {
 						"abs",
 						".json",
 					},
 				},
-				Validate: func(arg *cli.Arg, s string) error {
-					if err := cli.PathValidate(arg, s); err != nil {
-						return err
-					}
-					return nil
-				},
+				Validate: cli.PathValidate,
 			},
 			{
 				Name: "sources",
 				Type: "[]string",
 				Help: "Source paths to copy.",
 				Labels: map[string][]string{
-					"path": []string{
+					"path": {
 						"rel",
 						"glob",
 					},
 				},
-				Validate: func(arg *cli.Arg, s string) error {
-					if err := cli.PathValidate(arg, s); err != nil {
-						return err
-					}
-					return nil
-				},
+				Validate:   cli.PathValidate,
 				Positional: -1,
 			},
 			{
@@ -122,17 +112,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Type: "string",
 				Help: "Destination path.",
 				Labels: map[string][]string{
-					"path": []string{
+					"path": {
 						"rel",
 						"mkdir",
 					},
 				},
-				Validate: func(arg *cli.Arg, s string) error {
-					if err := cli.PathValidate(arg, s); err != nil {
-						return err
-					}
-					return nil
-				},
+				Validate:   cli.PathValidate,
 				Required:   true,
 				Positional: 1,
 			},
