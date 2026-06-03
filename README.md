@@ -164,7 +164,8 @@ These directives shape the generated CLI.
 | `//cli:path=not-exists` | Path must not exist. |
 | `//cli:path=dir` | Path must be a directory. |
 | `//cli:path=file` | Path must be a regular file. |
-| `//cli:path=mkdir` | Create the directory before validation. |
+| `//cli:path=mkdir` | Create the parent directory before validation. With `dir`, create the directory itself. Mode defaults to 755. |
+| `//cli:path=mkdir:700` | Same as `mkdir` with a custom octal permission mode. |
 | `//cli:path=symlink` | Path must be a symlink. |
 | `//cli:path=abs` | Path must be absolute. |
 | `//cli:path=rel` | Path must be relative. |

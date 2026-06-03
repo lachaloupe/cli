@@ -6,7 +6,6 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -70,26 +69,35 @@ type Command struct {
 }
 
 type Arg struct {
-	Name            string
-	Flag            string
-	Aliases         []string
-	Type            string
-	Help            string
-	Doc             string
-	Defaults        []string
+	Name             string
+	Flag             string
+	Aliases          []string
+	Type             string
+	Help             string
+	Doc              string
+	Defaults         []string
 	DefaultsOptional []bool
-	Labels          map[string][]string
-	Choices         []string
-	Directives []string
-	LookupEnum bool
-	Validate   string
-	Validates  []string
-	Required   bool
-	Positional int
+	Labels           map[string][]string
+	Choices          []string
+	Directives       []string
+	LookupEnum       bool
+	Validate         string
+	Validates        []string
+	Required         bool
+	Positional       int
 }
 
 func (arg *Arg) HasLabel(kind, value string) bool {
-	return slices.Contains(arg.Labels[kind], value)
+	for _, label := range arg.Labels[kind] {
+		if label == value {
+			return true
+		}
+
+		if name, _, ok := strings.Cut(label, ":"); ok && name == value {
+			return true
+		}
+	}
+	return false
 }
 
 func (arg *Arg) Native() bool {
@@ -321,31 +329,33 @@ func (c *Command) Process() error {
 
 func applyPathDirective(cmd *Command, arg *Arg, value string) error {
 	conflicts := func(value string) []string {
+		value, _, _ = strings.Cut(value, ":")
+
 		switch value {
 		case "dir":
-			return []string{"file", "not-exists", "glob"}
+			return []string{"dir", "file", "not-exists", "glob"}
 		case "file":
-			return []string{"dir", "empty", "not-exists", "mkdir", "glob"}
+			return []string{"file", "dir", "empty", "not-exists", "glob"}
 		case "empty":
-			return []string{"file", "not-exists", "glob"}
+			return []string{"empty", "file", "not-exists", "glob"}
 		case "mkdir":
-			return []string{"file", "not-exists", "glob", "symlink"}
+			return []string{"mkdir", "not-exists", "glob", "symlink"}
 		case "not-exists":
-			return []string{"exists", "dir", "file", "empty", "symlink", "exec", "mkdir"}
+			return []string{"not-exists", "exists", "dir", "file", "empty", "symlink", "exec", "mkdir"}
 		case "exists":
-			return []string{"not-exists", "glob"}
+			return []string{"exists", "not-exists", "glob"}
 		case "symlink":
-			return []string{"not-exists", "mkdir", "glob"}
+			return []string{"symlink", "not-exists", "mkdir", "glob"}
 		case "exec":
-			return []string{"not-exists", "glob"}
+			return []string{"exec", "not-exists", "glob"}
 		case "glob":
-			return []string{"exists", "not-exists", "dir", "file", "empty", "mkdir", "symlink", "exec"}
+			return []string{"glob", "exists", "not-exists", "dir", "file", "empty", "mkdir", "symlink", "exec"}
 		case "abs":
-			return []string{"rel"}
+			return []string{"abs", "rel"}
 		case "rel":
-			return []string{"abs"}
+			return []string{"rel", "abs"}
 		default:
-			return nil
+			return []string{value}
 		}
 	}
 
@@ -356,35 +366,29 @@ func applyPathDirective(cmd *Command, arg *Arg, value string) error {
 	switch value {
 	case "exists", "not-exists", "dir", "file", "empty", "mkdir", "symlink", "abs", "rel", "exec", "clean", "glob":
 	default:
+		if after, ok := strings.CutPrefix(value, "mkdir:"); ok {
+			if _, err := strconv.ParseUint(after, 8, 32); err != nil {
+				return fmt.Errorf("%s: invalid mkdir mode %q for %q", cmd.Path, after, arg.Name)
+			}
+
+			break
+		}
+
 		if !strings.HasPrefix(value, ".") {
 			return fmt.Errorf("%s: unsupported path directive %q for %q", cmd.Path, value, arg.Name)
 		}
 	}
 
-	if value == "dir" && arg.HasLabel("path", "file") {
-		return fmt.Errorf("%s: path directives for %q cannot require both file and dir", cmd.Path, arg.Name)
-	}
-
-	if value == "file" && arg.HasLabel("path", "dir") {
-		return fmt.Errorf("%s: path directives for %q cannot require both file and dir", cmd.Path, arg.Name)
-	}
-
-	if value == "file" && arg.HasLabel("path", "empty") {
-		return fmt.Errorf("%s: path directives for %q cannot require both file and empty", cmd.Path, arg.Name)
-	}
-
-	if value == "empty" && arg.HasLabel("path", "file") {
-		return fmt.Errorf("%s: path directives for %q cannot require both empty and file", cmd.Path, arg.Name)
-	}
-
-	if arg.HasLabel("path", value) {
-		return fmt.Errorf("%s: duplicate path directive %q for %q", cmd.Path, value, arg.Name)
-	}
-
-	for _, other := range conflicts(value) {
-		if arg.HasLabel("path", other) {
-			return fmt.Errorf("%s: path directives for %q cannot require both %s and %s", cmd.Path, arg.Name, value, other)
+	for i, other := range conflicts(value) {
+		if !arg.HasLabel("path", other) {
+			continue
 		}
+
+		if i == 0 {
+			return fmt.Errorf("%s: duplicate path directive %q for %q", cmd.Path, value, arg.Name)
+		}
+
+		return fmt.Errorf("%s: path directives for %q cannot require both %s and %s", cmd.Path, arg.Name, value, other)
 	}
 
 	if arg.Labels == nil {

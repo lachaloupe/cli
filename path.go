@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 )
 
 // PathValidate validates a path argument according to its configured path labels.
@@ -14,11 +16,23 @@ func PathValidate(arg *Arg, path string) error {
 	}
 
 	exts := []string{}
+	mode := os.FileMode(0755)
 	mkdir := false
 
 	for _, label := range labels {
 		if label == "mkdir" {
 			mkdir = true
+			continue
+		}
+
+		if after, ok := strings.CutPrefix(label, "mkdir:"); ok {
+			mkdir = true
+			m, err := strconv.ParseUint(after, 8, 32)
+			if err != nil {
+				panic("invalid mkdir mode: " + after)
+			}
+
+			mode = os.FileMode(m)
 			continue
 		}
 
@@ -80,12 +94,19 @@ func PathValidate(arg *Arg, path string) error {
 	}
 
 	if mkdir {
-		if err := os.MkdirAll(path, 0755); err != nil {
+		target := path
+
+		if !slices.Contains(labels, "dir") {
+			target = filepath.Dir(path)
+		}
+
+		if err := os.MkdirAll(target, mode); err != nil {
 			return err
 		}
 	}
 
 	info, err := os.Stat(path)
+
 	for _, label := range labels {
 		switch label {
 		case "exists":
@@ -93,6 +114,7 @@ func PathValidate(arg *Arg, path string) error {
 				if os.IsNotExist(err) {
 					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
+
 				return err
 			}
 		case "dir":
@@ -100,8 +122,10 @@ func PathValidate(arg *Arg, path string) error {
 				if os.IsNotExist(err) {
 					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
+
 				return err
 			}
+
 			if !info.IsDir() {
 				return &PathError{Kind: ErrPathDir, Arg: arg.Name, Path: path, Label: label}
 			}
@@ -110,8 +134,10 @@ func PathValidate(arg *Arg, path string) error {
 				if os.IsNotExist(err) {
 					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
+
 				return err
 			}
+
 			if !info.Mode().IsRegular() {
 				return &PathError{Kind: ErrPathFile, Arg: arg.Name, Path: path, Label: label}
 			}
@@ -120,26 +146,31 @@ func PathValidate(arg *Arg, path string) error {
 				if os.IsNotExist(err) {
 					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
+
 				return err
 			}
+
 			if !info.IsDir() {
 				return &PathError{Kind: ErrPathEmpty, Arg: arg.Name, Path: path, Label: label}
 			}
+
 			entries, err := os.ReadDir(path)
 			if err != nil {
 				return err
 			}
+
 			if len(entries) != 0 {
 				return &PathError{Kind: ErrPathEmpty, Arg: arg.Name, Path: path, Label: label}
 			}
-
 		case "exec":
 			if err != nil {
 				if os.IsNotExist(err) {
 					return &PathError{Kind: ErrPathExists, Arg: arg.Name, Path: path, Label: label}
 				}
+
 				return err
 			}
+
 			if info.Mode()&0111 == 0 {
 				return &PathError{Kind: ErrPathExecutable, Arg: arg.Name, Path: path, Label: label}
 			}
@@ -149,7 +180,7 @@ func PathValidate(arg *Arg, path string) error {
 	for _, label := range labels {
 		switch label {
 		case "not-exists":
-			if _, err := os.Lstat(path); err == nil {
+			if _, err := os.Stat(path); err == nil {
 				return &PathError{Kind: ErrPathNotExists, Arg: arg.Name, Path: path, Label: label}
 			} else if !os.IsNotExist(err) {
 				return err
@@ -162,6 +193,7 @@ func PathValidate(arg *Arg, path string) error {
 				}
 				return err
 			}
+
 			if info.Mode()&os.ModeSymlink == 0 {
 				return &PathError{Kind: ErrPathSymlink, Arg: arg.Name, Path: path, Label: label}
 			}

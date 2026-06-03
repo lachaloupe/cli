@@ -121,7 +121,7 @@ func TestFailures(t *testing.T) {
 		},
 		{
 			name: "path-conflict",
-			want: `/: path directives for "Path" cannot require both file and dir`,
+			want: `/: path directives for "Path" cannot require both dir and file`,
 		},
 		{
 			name: "path-directive-on-int",

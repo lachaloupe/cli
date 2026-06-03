@@ -115,6 +115,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 					"path": {
 						"rel",
 						"mkdir",
+						"dir",
 					},
 				},
 				Validate:   cli.PathValidate,

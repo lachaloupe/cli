@@ -49,6 +49,7 @@ type Args struct {
 	//cli:arg
 	//cli:path=rel
 	//cli:path=mkdir
+	//cli:path=dir
 	Destination string
 }
 

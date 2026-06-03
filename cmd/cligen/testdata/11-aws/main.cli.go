@@ -23,11 +23,12 @@ func init() {
 }
 
 func resolveNativeValue(ctx context.Context, arg *cli.Arg, value string) (string, bool, error) {
-	if !strings.HasPrefix(value, "@aws:") {
+	rest, ok := strings.CutPrefix(value, "@aws:")
+	if !ok {
 		return value, false, nil
 	}
 
-	kind, name, ok := strings.Cut(strings.TrimPrefix(value, "@aws:"), ":")
+	kind, name, ok := strings.Cut(rest, ":")
 	if !ok || name == "" {
 		return "", true, fmt.Errorf("%s: invalid AWS native value %q", arg.Name, value)
 	}
