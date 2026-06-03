@@ -36,6 +36,19 @@ func (gen *Generator) Generate(filename string) error {
 
 	fmt.Fprintln(w, "}")
 
+	for _, cmd := range gen.Cmds {
+		for _, c := range cmd.CommandList() {
+			if c.Struct == "" || len(c.Commands) == 0 {
+				continue
+			}
+
+			fmt.Fprintln(w, "")
+			fmt.Fprintf(w, "func %sFrom(ctx context.Context) %s {\n", c.Struct, c.Struct)
+			fmt.Fprintf(w, "return ctx.Value(cli.Args(%q)).(%s)\n", c.Path, c.Struct)
+			fmt.Fprintln(w, "}")
+		}
+	}
+
 	if _, ok := gen.Providers["aws"]; ok {
 		gen.generateAWSResolvers(w)
 	}

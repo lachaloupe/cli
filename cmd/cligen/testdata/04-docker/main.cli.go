@@ -18,6 +18,10 @@ func init() {
 	CLI.Register(invokeCLI)
 }
 
+func DockerArgsFrom(ctx context.Context) DockerArgs {
+	return ctx.Value(cli.Args("/")).(DockerArgs)
+}
+
 func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 	root := cli.Command{
 		Path: "/",
