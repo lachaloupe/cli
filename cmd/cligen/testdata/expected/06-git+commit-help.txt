@@ -4,11 +4,11 @@ RunCommit creates a new commit.
 
 Options:
   paths            Update the index before committing these paths. ([]string)
-  --all            Automatically stage tracked files that have been modified and deleted. (bool)
-  --amend          Replace the tip of the current branch by creating a new commit. (bool)
+  --[no-]all       Automatically stage tracked files that have been modified and deleted. (bool, default: false)
+  --[no-]amend     Replace the tip of the current branch by creating a new commit. (bool, default: false)
   --cleanup        Determine how the commit message is cleaned up. (CleanupMode, default: strip, choices: strip, whitespace, verbatim)
   --author         Override the commit author. (mail.Address)
   --message        Use the given message as the commit message. (string, default: $GIT_MESSAGE | @COMMIT_EDITMSG)
-  --signoff        Add a Signed-off-by trailer. (bool)
+  --[no-]signoff   Add a Signed-off-by trailer. (bool, default: false)
   --scope          Prefix for the commit scope. (string, default: $GIT_SCOPE/commit)
   --template       Use this template file when preparing the message. (string, labels: path=exists, path=file, path=readable, path=clean)

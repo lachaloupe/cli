@@ -48,6 +48,10 @@ func (c *Command) parseArgs(ctx context.Context, args []string) ([]string, *Comm
 	positionals := []*Arg{}
 
 	for _, arg := range c.Args {
+		if arg.Type == "bool" && c.Get("no-"+arg.Name) != nil {
+			return nil, nil, fmt.Errorf("flag %q conflicts with --no-%s (bool negation)", "no-"+arg.Name, arg.Name)
+		}
+
 		if err := c.applyDefault(ctx, arg); err != nil {
 			return nil, nil, err
 		}
@@ -116,6 +120,15 @@ func (c *Command) parseArgs(ctx context.Context, args []string) ([]string, *Comm
 
 			arg := c.Get(name)
 			if arg == nil {
+				if base, ok := strings.CutPrefix(name, "no-"); ok {
+					if neg := c.Get(base); neg != nil && neg.Type == "bool" {
+						if err := c.setArg(ctx, neg, "false"); err != nil {
+							return nil, nil, err
+						}
+						continue
+					}
+				}
+
 				return nil, nil, &ParseError{Kind: ErrUnknownFlag, Name: name}
 			}
 

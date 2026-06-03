@@ -5,9 +5,9 @@ Simple version of grep
 Options:
   pattern          Pattern to search for. (string)
   paths            Files or directories to search in. ([]string)
-  --ignore-case    Match case-insensitively. (bool)
-  --invert-match   Search for pattern that do not match instead. (bool)
-  --recursive      Search recursively in directories. (bool)
+  --[no-]ignore-case Match case-insensitively. (bool, default: false)
+  --[no-]invert-match Search for pattern that do not match instead. (bool, default: false)
+  --[no-]recursive Search recursively in directories. (bool, default: false)
   --max-count      Stop after this many matches. (uint, default: 10)
 
 Subcommands:

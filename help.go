@@ -113,10 +113,19 @@ func TemplateHelp(cmds []*Command) string {
 				Labels:   labels,
 			}
 
+			if item.Default == "" && len(arg.Defaults) == 0 && arg.Type == "bool" {
+				item.Default = "false"
+			}
+
 			if arg.Positional != 0 {
 				section.Positionals = append(section.Positionals, item)
 			} else {
 				item.Option = true
+
+				if arg.Type == "bool" {
+					item.Name = "[no-]" + arg.Name
+				}
+
 				section.Options = append(section.Options, item)
 			}
 		}
