@@ -3,7 +3,7 @@ module github.com/lachaloupe/cli/cmd/cligen
 go 1.26.3
 
 require (
-	github.com/lachaloupe/cli v0.1.4
+	github.com/lachaloupe/cli v0.1.5
 	golang.org/x/tools v0.45.0
 )
 

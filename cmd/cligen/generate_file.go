@@ -27,14 +27,6 @@ func (gen *Generator) Generate(filename string) error {
 	}
 
 	fmt.Fprintln(w, ")")
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "func init() {")
-
-	for _, cmd := range gen.Cmds {
-		fmt.Fprintf(w, "%s.Register(invoke%s)\n", cmd.ID, cmd.ID)
-	}
-
-	fmt.Fprintln(w, "}")
 
 	for _, cmd := range gen.Cmds {
 		for _, c := range cmd.CommandList() {
@@ -48,6 +40,15 @@ func (gen *Generator) Generate(filename string) error {
 			fmt.Fprintln(w, "}")
 		}
 	}
+
+	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "func init() {")
+
+	for _, cmd := range gen.Cmds {
+		fmt.Fprintf(w, "%s.Register(invoke%s)\n", cmd.ID, cmd.ID)
+	}
+
+	fmt.Fprintln(w, "}")
 
 	if _, ok := gen.Providers["aws"]; ok {
 		gen.generateAWSResolvers(w)

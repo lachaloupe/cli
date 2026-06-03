@@ -14,12 +14,12 @@ import (
 	"github.com/lachaloupe/cli"
 )
 
-func init() {
-	CLI.Register(invokeCLI)
-}
-
 func DockerArgsFrom(ctx context.Context) DockerArgs {
 	return ctx.Value(cli.Args("/")).(DockerArgs)
+}
+
+func init() {
+	CLI.Register(invokeCLI)
 }
 
 func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {

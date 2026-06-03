@@ -6,11 +6,13 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"os"
 	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/lachaloupe/cli"
+	"golang.org/x/tools/imports"
 )
 
 //go:generate go run . -source main.go -output main.cli.go
@@ -400,16 +402,28 @@ func Run(ctx context.Context, args Args) error {
 	_ = ctx
 
 	gofile := args.Source
-	g, err := Parse(gofile, args.Provider)
-	if err != nil {
-		return err
-	}
 
 	output := args.Output
 	if output == "" {
 		if u, ok := strings.CutSuffix(gofile, ".go"); ok {
 			output = u + ".cli.go"
 		}
+	}
+
+	if data, err := os.ReadFile(output); err == nil {
+		if i := strings.Index(string(data), "\nfunc init() {"); i >= 0 {
+			fixed, err := imports.Process(output, data[:i+1], nil)
+			if err != nil {
+				fixed = data[:i+1]
+			}
+
+			os.WriteFile(output, fixed, 0644)
+		}
+	}
+
+	g, err := Parse(gofile, args.Provider)
+	if err != nil {
+		return err
 	}
 
 	if err := g.Generate(output); err != nil {
