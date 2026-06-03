@@ -125,8 +125,6 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 		},
 	}
 
-	root.AddBuiltins()
-
 	cmds, err := root.Parse(ctx, args)
 	if err != nil {
 		return cmds, err

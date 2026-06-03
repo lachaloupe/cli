@@ -8,7 +8,7 @@ import (
 
 //go:generate go tool cligen
 
-const serveTemplate = `{{define "argDetail"}}{{.Help}} ({{.Type}}{{if .Default}}, default: {{.Default}}{{else if .Defaults}}, default: {{range $i, $default := .Defaults}}{{if $i}} | {{end}}{{$default}}{{end}}{{end}}{{if .Choices}}, choices: {{range $i, $choice := .Choices}}{{if $i}}, {{end}}{{$choice}}{{end}}{{end}}{{if .Labels}}, labels: {{range $i, $label := .Labels}}{{if $i}}, {{end}}{{$label}}{{end}}{{end}}){{end}}{{.Usage}}{{if .Command.Help}}
+const serveTemplate = `{{define "argDetail"}}{{.Help}} ({{.Type}}{{if .Defaults}}, default: {{range $i, $default := .Defaults}}{{if $i}} | {{end}}{{$default}}{{end}}{{end}}{{if .Choices}}, choices: {{range $i, $choice := .Choices}}{{if $i}}, {{end}}{{$choice}}{{end}}{{end}}{{if .Labels}}, labels: {{range $i, $label := .Labels}}{{if $i}}, {{end}}{{$label}}{{end}}{{end}}){{end}}{{.Usage}}{{if .Command.Help}}
 
 {{.Command.Help}}{{end}}{{if .Current.Options}}
 

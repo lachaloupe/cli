@@ -62,7 +62,9 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Type:    "uint",
 				Aliases: []string{"n"},
 				Help:    "Print the first NUM lines instead of the first 10.",
-				Default: "10",
+				Defaults: []string{
+					"10",
+				},
 			},
 			{
 				Name:    "quiet",
@@ -84,8 +86,6 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			},
 		},
 	}
-
-	root.AddBuiltins()
 
 	cmds, err := root.Parse(ctx, args)
 	if err != nil {

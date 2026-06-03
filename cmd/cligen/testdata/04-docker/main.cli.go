@@ -90,7 +90,9 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Type:    "[]string",
 				Aliases: []string{"H"},
 				Help:    "Daemon socket to connect to.",
-				Default: "unix:///var/run/docker.sock",
+				Defaults: []string{
+					"unix:///var/run/docker.sock",
+				},
 			},
 			{
 				Name: "tls",
@@ -539,10 +541,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 								Help: "Automatically remove the container when it exits.",
 							},
 							{
-								Name:    "pull",
-								Type:    "string",
-								Help:    "Pull image before running.",
-								Default: "missing",
+								Name: "pull",
+								Type: "string",
+								Help: "Pull image before running.",
+								Defaults: []string{
+									"missing",
+								},
 								Choices: []string{
 									"always",
 									"missing",
@@ -632,10 +636,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 								Help: "Show logs since timestamp or relative duration.",
 							},
 							{
-								Name:    "tail",
-								Type:    "string",
-								Help:    "Number of lines to show from the end of the logs.",
-								Default: "all",
+								Name: "tail",
+								Type: "string",
+								Help: "Number of lines to show from the end of the logs.",
+								Defaults: []string{
+									"all",
+								},
 							},
 							{
 								Name:    "timestamps",
@@ -808,10 +814,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						},
 						Args: []*cli.Arg{
 							{
-								Name:    "driver",
-								Type:    "string",
-								Help:    "Driver to manage the network.",
-								Default: "bridge",
+								Name: "driver",
+								Type: "string",
+								Help: "Driver to manage the network.",
+								Defaults: []string{
+									"bridge",
+								},
 							},
 							{
 								Name:    "label",
@@ -968,10 +976,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 						},
 						Args: []*cli.Arg{
 							{
-								Name:    "driver",
-								Type:    "string",
-								Help:    "Driver to manage the volume.",
-								Default: "local",
+								Name: "driver",
+								Type: "string",
+								Help: "Driver to manage the volume.",
+								Defaults: []string{
+									"local",
+								},
 							},
 							{
 								Name:    "label",
@@ -1128,8 +1138,6 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			},
 		},
 	}
-
-	root.AddBuiltins()
 
 	cmds, err := root.Parse(ctx, args)
 	if err != nil {

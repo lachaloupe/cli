@@ -78,8 +78,6 @@ func (gen *Generator) generateInvoke(w *strings.Builder, cmd *Command) error {
 
 	fmt.Fprintln(w, "}")
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "root.AddBuiltins()")
-	fmt.Fprintln(w, "")
 	if _, ok := gen.Providers["aws"]; ok {
 		gen.generateProviderHooks(w)
 	}

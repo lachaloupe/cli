@@ -136,8 +136,6 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 		},
 	}
 
-	root.AddBuiltins()
-
 	for _, cmd := range root.CommandList() {
 		if cmd.Lookup != nil {
 			prevLookup := cmd.Lookup

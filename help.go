@@ -12,7 +12,7 @@ type Renderer func(cmds []*Command) string
 
 // DefaultTemplate renders help output when no command in the current path
 // overrides Template.
-var DefaultTemplate = `{{define "argDetail"}}{{.Help}} ({{.Type}}{{if .Default}}, default: {{.Default}}{{else if .Defaults}}, default: {{range $i, $default := .Defaults}}{{if $i}} | {{end}}{{$default}}{{end}}{{end}}{{if .Choices}}, choices: {{range $i, $choice := .Choices}}{{if $i}}, {{end}}{{$choice}}{{end}}{{end}}{{if .Labels}}, labels: {{range $i, $label := .Labels}}{{if $i}}, {{end}}{{$label}}{{end}}{{end}}){{end}}{{.Usage}}{{if .Command.Help}}
+var DefaultTemplate = `{{define "argDetail"}}{{.Help}} ({{.Type}}{{if .Defaults}}, default: {{range $i, $default := .Defaults}}{{if $i}} | {{end}}{{$default}}{{end}}{{end}}{{if .Choices}}, choices: {{range $i, $choice := .Choices}}{{if $i}}, {{end}}{{$choice}}{{end}}{{end}}{{if .Labels}}, labels: {{range $i, $label := .Labels}}{{if $i}}, {{end}}{{$label}}{{end}}{{end}}){{end}}{{.Usage}}{{if .Command.Help}}
 
 {{.Command.Help}}{{end}}{{range .Sections}}{{if .Args}}
 
@@ -55,7 +55,6 @@ func TemplateHelp(cmds []*Command) string {
 		Name     string
 		Type     string
 		Help     string
-		Default  string
 		Defaults []string
 		Choices  []string
 		Labels   []string
@@ -83,10 +82,6 @@ func TemplateHelp(cmds []*Command) string {
 		section := helpSection{Command: cmd, Current: current, Global: global}
 
 		for _, arg := range cmd.Args {
-			if arg.Default != "" && len(arg.Defaults) != 0 {
-				panic("arg cannot have both Default and Defaults")
-			}
-
 			labels := []string{}
 			if len(arg.Labels) != 0 {
 				keys := make([]string, 0, len(arg.Labels))
@@ -107,14 +102,13 @@ func TemplateHelp(cmds []*Command) string {
 				Name:     arg.Name,
 				Type:     arg.Type,
 				Help:     arg.Help,
-				Default:  arg.Default,
 				Defaults: arg.Defaults,
 				Choices:  arg.Choices,
 				Labels:   labels,
 			}
 
-			if item.Default == "" && len(arg.Defaults) == 0 && arg.Type == "bool" {
-				item.Default = "false"
+			if len(arg.Defaults) == 0 && arg.Type == "bool" {
+				item.Defaults = []string{"false"}
 			}
 
 			if arg.Positional != 0 {

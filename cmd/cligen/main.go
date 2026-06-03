@@ -296,8 +296,8 @@ func (c *Command) Process() error {
 
 	if len(c.Commands) != 0 {
 		for _, arg := range c.Args {
-			if arg.Positional == -1 {
-				return fmt.Errorf("subcommands are not allowed when a positional argument accepts an unbounded number of values")
+			if arg.Positional != 0 && !arg.Required {
+				return fmt.Errorf("positional argument %q must be required when subcommands are present", arg.Flag)
 			}
 		}
 

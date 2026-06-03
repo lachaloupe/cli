@@ -43,10 +43,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 		},
 		Args: []*cli.Arg{
 			{
-				Name:    "source",
-				Type:    "string",
-				Help:    "Location of the source file with the cli.Command definition.",
-				Default: "$GOFILE",
+				Name: "source",
+				Type: "string",
+				Help: "Location of the source file with the cli.Command definition.",
+				Defaults: []string{
+					"$GOFILE",
+				},
 				Labels: map[string][]string{
 					"path": {
 						"exists",
@@ -69,8 +71,6 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			},
 		},
 	}
-
-	root.AddBuiltins()
 
 	cmds, err := root.Parse(ctx, args)
 	if err != nil {

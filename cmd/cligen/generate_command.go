@@ -104,7 +104,9 @@ func (gen *Generator) generateCommand(w io.Writer, cmd *Command) error {
 					fmt.Fprintln(w, "},")
 					fmt.Fprintln(w, "DefaultsOptional: []bool{true},")
 				} else {
-					fmt.Fprintf(w, "Default: %q,\n", arg.Defaults[0])
+					fmt.Fprintln(w, "Defaults: []string{")
+					fmt.Fprintf(w, "%q,\n", arg.Defaults[0])
+					fmt.Fprintln(w, "},")
 				}
 			default:
 				fmt.Fprintln(w, "Defaults: []string{")

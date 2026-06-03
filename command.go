@@ -50,7 +50,6 @@ type Arg struct {
 	Aliases          []string
 	Type             string
 	Help             string
-	Default          string
 	Defaults         []string
 	DefaultsOptional []bool
 	Labels           map[string][]string

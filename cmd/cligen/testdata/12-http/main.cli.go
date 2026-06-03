@@ -26,7 +26,7 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Name:     "serve",
 				Path:     "/serve",
 				Help:     "Run the HTTP server",
-				Template: "{{define \"argDetail\"}}{{.Help}} ({{.Type}}{{if .Default}}, default: {{.Default}}{{else if .Defaults}}, default: {{range $i, $default := .Defaults}}{{if $i}} | {{end}}{{$default}}{{end}}{{end}}{{if .Choices}}, choices: {{range $i, $choice := .Choices}}{{if $i}}, {{end}}{{$choice}}{{end}}{{end}}{{if .Labels}}, labels: {{range $i, $label := .Labels}}{{if $i}}, {{end}}{{$label}}{{end}}{{end}}){{end}}{{.Usage}}{{if .Command.Help}}\n\n{{.Command.Help}}{{end}}{{if .Current.Options}}\n\nOptions:\n{{range $i, $arg := .Current.Options}}{{if $i}}{{\"\\n\"}}{{end}}{{printf \"  --%-14s \" .Name}}{{template \"argDetail\" .}}{{end}}{{end}}\n\nRoutes:\n  GET /healthz\n  GET /readyz\n",
+				Template: "{{define \"argDetail\"}}{{.Help}} ({{.Type}}{{if .Defaults}}, default: {{range $i, $default := .Defaults}}{{if $i}} | {{end}}{{$default}}{{end}}{{end}}{{if .Choices}}, choices: {{range $i, $choice := .Choices}}{{if $i}}, {{end}}{{$choice}}{{end}}{{end}}{{if .Labels}}, labels: {{range $i, $label := .Labels}}{{if $i}}, {{end}}{{$label}}{{end}}{{end}}){{end}}{{.Usage}}{{if .Command.Help}}\n\n{{.Command.Help}}{{end}}{{if .Current.Options}}\n\nOptions:\n{{range $i, $arg := .Current.Options}}{{if $i}}{{\"\\n\"}}{{end}}{{printf \"  --%-14s \" .Name}}{{template \"argDetail\" .}}{{end}}{{end}}\n\nRoutes:\n  GET /healthz\n  GET /readyz\n",
 				Invoke: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 					s := cli.ServeHTTPArgs{}
 
@@ -45,17 +45,17 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				},
 				Args: []*cli.Arg{
 					{
-						Name:    "addr",
-						Type:    "string",
-						Help:    "Address to listen on.",
-						Default: "127.0.0.1:8080",
+						Name: "addr",
+						Type: "string",
+						Help: "Address to listen on.",
+						Defaults: []string{
+							"127.0.0.1:8080",
+						},
 					},
 				},
 			},
 		},
 	}
-
-	root.AddBuiltins()
 
 	cmds, err := root.Parse(ctx, args)
 	if err != nil {

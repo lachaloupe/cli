@@ -31,6 +31,7 @@ func (c *Command) Get(name string) *Arg {
 	return nil
 }
 
+// CommandList returns a flattened list of all commands in the tree rooted at c.
 func (c *Command) CommandList() []*Command {
 	list := []*Command{c}
 
@@ -39,32 +40,6 @@ func (c *Command) CommandList() []*Command {
 	}
 
 	return list
-}
-
-// AddBuiltins installs optional built-in subcommands for the command tree.
-func (c *Command) AddBuiltins() {
-	if Version == "" {
-		return
-	}
-
-	if c.Path != "/" {
-		return
-	}
-
-	for _, cmd := range c.Commands {
-		if cmd.Name == "version" || slices.Contains(cmd.Aliases, "version") {
-			return
-		}
-	}
-
-	c.Commands = append(c.Commands, &Command{
-		Name: "version",
-		Path: "/version",
-		Help: "Show version information.",
-		Invoke: func(ctx context.Context, cmd *Command) (context.Context, error) {
-			return ctx, errors.Join(RunVersion(ctx), cmd.Cleanup())
-		},
-	})
 }
 
 // RunVersion prints the configured CLI version.
@@ -97,6 +72,7 @@ func (c *Command) Main() {
 
 	cmds, err := c.Run(ctx, os.Args[1:])
 	if err != nil {
+		// Close resources opened during Parse if the handler never gets called.
 		for _, cmd := range cmds {
 			cmd.Cleanup()
 		}
@@ -110,6 +86,7 @@ func (c *Command) Main() {
 	}
 }
 
+// Cleanup runs all registered cleanup handlers in reverse order.
 func (c *Command) Cleanup() error {
 	var err error
 	for i := len(c.Cleanups) - 1; i >= 0; i-- {

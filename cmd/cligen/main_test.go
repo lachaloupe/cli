@@ -129,7 +129,7 @@ func TestFailures(t *testing.T) {
 		},
 		{
 			name: "subcommands-with-varargs",
-			want: `subcommands are not allowed when a positional argument accepts an unbounded number of values`,
+			want: `positional argument "paths" must be required when subcommands are present`,
 		},
 		{
 			name: "unsupported-field",

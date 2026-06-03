@@ -43,16 +43,20 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 		},
 		Args: []*cli.Arg{
 			{
-				Name:    "scale",
-				Type:    "float32",
-				Help:    "Multiply each sample by this scale factor before reporting.",
-				Default: "1",
+				Name: "scale",
+				Type: "float32",
+				Help: "Multiply each sample by this scale factor before reporting.",
+				Defaults: []string{
+					"1",
+				},
 			},
 			{
-				Name:    "percentiles",
-				Type:    "[]float64",
-				Help:    "Percentiles to report.",
-				Default: "50,95,99",
+				Name: "percentiles",
+				Type: "[]float64",
+				Help: "Percentiles to report.",
+				Defaults: []string{
+					"50,95,99",
+				},
 			},
 			{
 				Name:       "samples",
@@ -63,8 +67,6 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			},
 		},
 	}
-
-	root.AddBuiltins()
 
 	cmds, err := root.Parse(ctx, args)
 	if err != nil {

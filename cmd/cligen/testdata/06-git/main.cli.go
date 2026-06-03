@@ -97,8 +97,10 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 							var v CleanupMode
 							return v, any(&v).(encoding.TextUnmarshaler).UnmarshalText([]byte(s))
 						},
-						Help:    "Determine how the commit message is cleaned up.",
-						Default: "strip",
+						Help: "Determine how the commit message is cleaned up.",
+						Defaults: []string{
+							"strip",
+						},
 						Choices: cli.EnumChoices(func() any {
 							var v CleanupMode
 							return &v
@@ -222,8 +224,6 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			},
 		},
 	}
-
-	root.AddBuiltins()
 
 	cmds, err := root.Parse(ctx, args)
 	if err != nil {

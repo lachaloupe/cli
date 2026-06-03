@@ -90,12 +90,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Type:    "uint",
 				Aliases: []string{"m"},
 				Help:    "Stop after this many matches.",
-				Default: "10",
+				Defaults: []string{
+					"10",
+				},
 			},
 		},
 	}
-
-	root.AddBuiltins()
 
 	cmds, err := root.Parse(ctx, args)
 	if err != nil {

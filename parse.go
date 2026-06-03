@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +15,27 @@ import (
 // Parse walks the command tree, parses arguments, and returns the matched command path.
 // Parse stores parsed argument values and cleanup handlers on the command tree itself, so callers that need an independent parse should build a fresh tree.
 func (c *Command) Parse(ctx context.Context, args []string) ([]*Command, error) {
+	if Version != "" && c.Path == "/" {
+		version := false
+		for _, cmd := range c.Commands {
+			if cmd.Name == "version" || slices.Contains(cmd.Aliases, "version") {
+				version = true
+				break
+			}
+		}
+
+		if !version {
+			c.Commands = append(c.Commands, &Command{
+				Name: "version",
+				Path: "/version",
+				Help: "Show version information.",
+				Invoke: func(ctx context.Context, cmd *Command) (context.Context, error) {
+					return ctx, errors.Join(RunVersion(ctx), cmd.Cleanup())
+				},
+			})
+		}
+	}
+
 	list := []*Command{}
 	next := c
 
@@ -199,11 +221,6 @@ func (c *Command) parseArgs(ctx context.Context, args []string) ([]string, *Comm
 func (c *Command) applyDefault(ctx context.Context, arg *Arg) error {
 	defaults := arg.Defaults
 	optional := arg.DefaultsOptional
-
-	if arg.Default != "" {
-		defaults = append([]string{arg.Default}, defaults...)
-		optional = append([]bool{false}, optional...)
-	}
 
 	if len(defaults) == 0 {
 		return nil

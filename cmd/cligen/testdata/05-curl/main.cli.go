@@ -81,7 +81,9 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Type:    "string",
 				Aliases: []string{"X"},
 				Help:    "Request method to use.",
-				Default: "GET",
+				Defaults: []string{
+					"GET",
+				},
 			},
 			{
 				Name:    "header",
@@ -102,10 +104,12 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Help:    "Follow redirects.",
 			},
 			{
-				Name:    "connect-timeout",
-				Type:    "time.Duration",
-				Help:    "Maximum time allowed for connection setup.",
-				Default: "5s",
+				Name: "connect-timeout",
+				Type: "time.Duration",
+				Help: "Maximum time allowed for connection setup.",
+				Defaults: []string{
+					"5s",
+				},
 			},
 			{
 				Name: "retry",
@@ -147,7 +151,9 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 				Type:    "string",
 				Aliases: []string{"A"},
 				Help:    "Send this user agent to the server.",
-				Default: "curl/8.0",
+				Defaults: []string{
+					"curl/8.0",
+				},
 			},
 			{
 				Name:       "url",
@@ -158,8 +164,6 @@ func invokeCLI(ctx context.Context, args []string) ([]*cli.Command, error) {
 			},
 		},
 	}
-
-	root.AddBuiltins()
 
 	cmds, err := root.Parse(ctx, args)
 	if err != nil {
