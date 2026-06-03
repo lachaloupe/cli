@@ -7,31 +7,44 @@ func TestKebabConversion(t *testing.T) {
 		field string
 		want  string
 	}{
+		// Single and multi-word.
 		{"Name", "name"},
+		{"Verbose", "verbose"},
+		{"DryRun", "dry-run"},
 		{"IgnoreCase", "ignore-case"},
 		{"MaxCount", "max-count"},
+		{"OutputDir", "output-dir"},
 
-		// Lowercase to digit boundary.
-		{"Port8080", "port-8080"},
-		{"Retry3xx", "retry-3-xx"},
-
-		// Digit to uppercase boundary.
-		{"Base64Encoded", "base-64-encoded"},
-		{"Port8080HTTP", "port-8080-http"},
-
-		// Acronym followed by word.
-		{"HTTPServer", "http-server"},
+		// Leading acronym.
+		{"HTTPPort", "http-port"},
 		{"HTTPSPort", "https-port"},
+		{"TLSCert", "tls-cert"},
 		{"ACLEnabled", "acl-enabled"},
+		{"CPULimit", "cpu-limit"},
+		{"IAMRole", "iam-role"},
 
-		// Trailing acronym.
-		{"ID", "id"},
+		// Short and trailing acronyms.
 		{"UserID", "user-id"},
+		{"UID", "uid"},
+		{"EnableTLS", "enable-tls"},
 
-		// Uppercase-digit runs stay together.
+		// Acronym with trailing digit.
+		{"HTTP2", "http2"},
+		{"UseHTTP2", "use-http2"},
+		{"S3", "s3"},
+		{"S3Bucket", "s3-bucket"},
+
+		// Acronym-digit runs.
 		{"SHA256Sum", "sha256-sum"},
-		{"TLS13Only", "tls13-only"},
-		{"H2C", "h2-c"},
+
+		// Digit stays glued to preceding word.
+		{"UseBase64", "use-base64"},
+		{"UseLog2", "use-log2"},
+		{"UseAtan2", "use-atan2"},
+		{"UseBzip2", "use-bzip2"},
+
+		// Unicode letters.
+		{"DéjàVu", "déjà-vu"},
 	}
 
 	for _, test := range tests {

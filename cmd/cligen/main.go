@@ -174,10 +174,6 @@ func (c *Command) Process() error {
 
 					w.WriteRune(unicode.ToLower(c))
 				case unicode.IsDigit(c):
-					if i > 0 && unicode.IsLetter(s[i-1]) && !unicode.IsUpper(s[i-1]) {
-						w.WriteByte('-')
-					}
-
 					w.WriteRune(c)
 				case c == '_' || c == '-':
 					w.WriteByte('-')
